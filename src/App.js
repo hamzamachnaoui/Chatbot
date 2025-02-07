@@ -15,7 +15,6 @@ import {
   onSnapshot,
   query,
   orderBy,
-  getDocs,
 } from "firebase/firestore";
 import {
   getAuth,
@@ -33,7 +32,13 @@ import {
   ListItemAvatar,
   Box,
   Typography,
+  CssBaseline,
+  AppBar,
+  Toolbar,
+  IconButton,
 } from "@mui/material";
+import { createTheme, ThemeProvider } from "@mui/material/styles";
+import { Brightness4, Brightness7 } from "@mui/icons-material";
 import EmojiPicker from "emoji-picker-react";
 
 // Configuration Firebase
@@ -51,13 +56,41 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 
 function App() {
+  const [darkMode, setDarkMode] = useState(false);
+
+  const theme = createTheme({
+    palette: {
+      mode: darkMode ? "dark" : "light",
+      background: {
+        default: darkMode ? "#121212" : "#f5f5f5",
+      },
+    },
+  });
+
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<ProfileSetup />} />
-        <Route path="/chat/:roomId/*" element={<ChatWithRooms />} />
-      </Routes>
-    </Router>
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <Router>
+        <AppBar position="static">
+          <Toolbar>
+            <Typography variant="h6" sx={{ flexGrow: 1 }}>
+              Chat Application
+            </Typography>
+            <IconButton
+              edge="end"
+              color="inherit"
+              onClick={() => setDarkMode(!darkMode)}
+            >
+              {darkMode ? <Brightness7 /> : <Brightness4 />}
+            </IconButton>
+          </Toolbar>
+        </AppBar>
+        <Routes>
+          <Route path="/" element={<ProfileSetup />} />
+          <Route path="/chat/:roomId/*" element={<ChatWithRooms />} />
+        </Routes>
+      </Router>
+    </ThemeProvider>
   );
 }
 
@@ -92,59 +125,56 @@ function ProfileSetup() {
 
   return (
     <Box
-  sx={{
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    padding: 4,
-    maxWidth: "100%", // Adjusted for responsiveness
-    margin: "auto",
-  }}
->
-  <Typography variant="h4" gutterBottom>
-    Configurez votre profil
-  </Typography>
-  <TextField
-    label="Pseudo"
-    value={username}
-    onChange={(e) => setUsername(e.target.value)}
-    sx={{ marginBottom: 2, width: "100%" }} 
-  />
-  <Typography variant="h6" gutterBottom>
-    Choisissez un avatar :
-  </Typography>
-  <Box
-    sx={{
-      display: "flex",
-      flexWrap: "wrap",
-      justifyContent: "center",
-      gap: 2,
-      marginBottom: 2,
-    }}
-  >
-    {avatars.map((url, index) => (
-      <Avatar
-        key={index}
-        src={url}
-        sx={{
-          width: 60,
-          height: 60,
-          border:
-            selectedAvatar === url
-              ? "3px solid blue"
-              : "3px solid transparent",
-          cursor: "pointer",
-          margin: 1, 
-        }}
-        onClick={() => setSelectedAvatar(url)}
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        padding: 4,
+        maxWidth: "100%",
+        margin: "auto",
+      }}
+    >
+      <Typography variant="h4" gutterBottom>
+        Configurez votre profil
+      </Typography>
+      <TextField
+        label="Pseudo"
+        value={username}
+        onChange={(e) => setUsername(e.target.value)}
+        sx={{ marginBottom: 2, width: "100%" }}
       />
-    ))}
-  </Box>
-  <Button variant="contained" onClick={handleStart}>
-    Commencer
-  </Button>
-</Box>
-
+      <Typography variant="h6" gutterBottom>
+        Choisissez un avatar :
+      </Typography>
+      <Box
+        sx={{
+          display: "flex",
+          flexWrap: "wrap",
+          justifyContent: "center",
+          gap: 2,
+          marginBottom: 2,
+        }}
+      >
+        {avatars.map((url, index) => (
+          <Avatar
+            key={index}
+            src={url}
+            sx={{
+              width: 60,
+              height: 60,
+              border:
+                selectedAvatar === url ? "3px solid blue" : "3px solid transparent",
+              cursor: "pointer",
+              margin: 1,
+            }}
+            onClick={() => setSelectedAvatar(url)}
+          />
+        ))}
+      </Box>
+      <Button variant="contained" onClick={handleStart}>
+        Commencer
+      </Button>
+    </Box>
   );
 }
 
@@ -158,7 +188,6 @@ function ChatWithRooms() {
     "Cloud Computing",
   ];
   const [currentUser, setCurrentUser] = useState(null);
-  const [roomMessages, setRoomMessages] = useState({});
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -167,20 +196,6 @@ function ChatWithRooms() {
       displayName: user?.displayName || "Utilisateur",
       photoURL: user?.photoURL || "",
     });
-
-    const fetchRoomMessages = () => {
-      rooms.forEach((room) => {
-        const q = collection(db, "rooms", room, "messages");
-        onSnapshot(q, (snapshot) => {
-          setRoomMessages((prev) => ({
-            ...prev,
-            [room]: snapshot.size,
-          }));
-        });
-      });
-    };
-
-    fetchRoomMessages();
   }, []);
 
   const handleLogout = async () => {
@@ -190,23 +205,16 @@ function ChatWithRooms() {
 
   return (
     <Box sx={{ display: "flex", height: "100vh" }}>
-      {/* Sidebar gauche */}
       <Box
         sx={{
           width: "25%",
-          backgroundColor: "#f5f5f5",
+          backgroundColor: "background.default",
           display: "flex",
           flexDirection: "column",
           padding: 2,
         }}
       >
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            marginBottom: 2,
-          }}
-        >
+        <Box sx={{ display: "flex", alignItems: "center", marginBottom: 2 }}>
           <Avatar src={currentUser?.photoURL} sx={{ marginRight: 1 }} />
           <Box>
             <Typography variant="h6">{currentUser?.displayName}</Typography>
@@ -228,27 +236,18 @@ function ChatWithRooms() {
             <ListItem
               key={index}
               sx={{
-                borderBottom: `3px solid ${
-                  room === window.location.pathname.split("/")[2]
-                    ? "green"
-                    : "transparent"
-                }`,
+                borderBottom: `3px solid transparent`,
                 marginBottom: "10px",
                 padding: "10px",
                 cursor: "pointer",
               }}
               onClick={() => navigate(`/chat/${room}`)}
             >
-              <ListItemText
-                primary={room}
-                secondary={`Messages : ${roomMessages[room] || 0}`}
-              />
+              <ListItemText primary={room} />
             </ListItem>
           ))}
         </List>
       </Box>
-
-      {/* Section principale */}
       <Box sx={{ flex: 1 }}>
         <Routes>
           <Route path="*" element={<ChatRoom />} />
@@ -271,9 +270,7 @@ function ChatRoom() {
       orderBy("timestamp", "asc")
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setMessages(
-        snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
-      );
+      setMessages(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
     });
 
     return () => unsubscribe();
