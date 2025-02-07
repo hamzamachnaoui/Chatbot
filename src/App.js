@@ -15,6 +15,7 @@ import {
   onSnapshot,
   query,
   orderBy,
+  getDocs,
 } from "firebase/firestore";
 import {
   getAuth,
@@ -32,13 +33,13 @@ import {
   ListItemAvatar,
   Box,
   Typography,
+  Fab,
   createTheme,
   ThemeProvider,
-  CssBaseline,
-  Fab,
 } from "@mui/material";
-import { DarkMode, LightMode } from "@mui/icons-material";
+import { Brightness4, Brightness7 } from "@mui/icons-material";
 import EmojiPicker from "emoji-picker-react";
+import { grey, blue } from "@mui/material/colors";
 
 // Configuration Firebase
 const firebaseConfig = {
@@ -54,43 +55,28 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-const lightTheme = createTheme({
-  palette: {
-    mode: "light",
-  },
-});
-
-const darkTheme = createTheme({
-  palette: {
-    mode: "dark",
-  },
-});
-
 function App() {
   const [darkMode, setDarkMode] = useState(false);
+  const theme = createTheme({
+    palette: {
+      mode: darkMode ? "dark" : "light",
+      background: {
+        default: darkMode ? grey[900] : grey[100],
+      },
+      primary: blue,
+    },
+  });
 
   const toggleDarkMode = () => setDarkMode(!darkMode);
 
   return (
-    <ThemeProvider theme={darkMode ? darkTheme : lightTheme}>
-      <CssBaseline />
+    <ThemeProvider theme={theme}>
       <Router>
         <Routes>
           <Route path="/" element={<ProfileSetup />} />
-          <Route path="/chat/:roomId/*" element={<ChatWithRooms />} />
+          <Route path="/chat/:roomId/*" element={<ChatWithRooms toggleDarkMode={toggleDarkMode} />} />
         </Routes>
       </Router>
-      <Fab
-        color="primary"
-        onClick={toggleDarkMode}
-        sx={{
-          position: "fixed",
-          bottom: 16,
-          right: 16,
-        }}
-      >
-        {darkMode ? <LightMode /> : <DarkMode />}
-      </Fab>
     </ThemeProvider>
   );
 }
@@ -181,7 +167,7 @@ function ProfileSetup() {
   );
 }
 
-function ChatWithRooms() {
+function ChatWithRooms({ toggleDarkMode }) {
   const rooms = [
     "Général",
     "Programmation",
@@ -284,6 +270,13 @@ function ChatWithRooms() {
           <Route path="*" element={<ChatRoom />} />
         </Routes>
       </Box>
+      <Fab
+        color="primary"
+        sx={{ position: "fixed", bottom: 16, right: 16 }}
+        onClick={toggleDarkMode}
+      >
+        {darkMode ? <Brightness7 /> : <Brightness4 />}
+      </Fab>
     </Box>
   );
 }
