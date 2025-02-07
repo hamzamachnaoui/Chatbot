@@ -1,4 +1,3 @@
-// Import necessary libraries and Firebase SDK
 import React, { useState, useEffect, useRef } from "react";
 import {
   BrowserRouter as Router,
@@ -35,12 +34,22 @@ import {
   Fab,
   createTheme,
   ThemeProvider,
+  useMediaQuery,
+  IconButton,
+  Drawer,
+  AppBar,
+  Toolbar,
 } from "@mui/material";
-import { Brightness4, Brightness7 } from "@mui/icons-material";
+import {
+  Brightness4,
+  Brightness7,
+  Menu as MenuIcon,
+  Send as SendIcon,
+  EmojiEmotions,
+} from "@mui/icons-material";
 import EmojiPicker from "emoji-picker-react";
 import { grey, blue } from "@mui/material/colors";
 
-// Configuration Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyBfHNrbuUOJsZhts8P2Z0MUzQ0FkPXb0pk",
   authDomain: "chatbot-93bd7.firebaseapp.com",
@@ -54,6 +63,8 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
+const drawerWidth = 240;
+
 function App() {
   const [darkMode, setDarkMode] = useState(false);
   const theme = createTheme({
@@ -61,6 +72,7 @@ function App() {
       mode: darkMode ? "dark" : "light",
       background: {
         default: darkMode ? grey[900] : grey[100],
+        paper: darkMode ? grey[800] : grey[50],
       },
       primary: blue,
     },
@@ -70,15 +82,17 @@ function App() {
 
   return (
     <ThemeProvider theme={theme}>
-      <Router>
-        <Routes>
-          <Route path="/" element={<ProfileSetup />} />
-          <Route
-            path="/chat/:roomId/*"
-            element={<ChatWithRooms toggleDarkMode={toggleDarkMode} darkMode={darkMode} />}
-          />
-        </Routes>
-      </Router>
+      <Box sx={{ backgroundColor: "background.default", minHeight: "100vh" }}>
+        <Router>
+          <Routes>
+            <Route path="/" element={<ProfileSetup />} />
+            <Route
+              path="/chat/:roomId/*"
+              element={<ChatWithRooms toggleDarkMode={toggleDarkMode} darkMode={darkMode} />}
+            />
+          </Routes>
+        </Router>
+      </Box>
     </ThemeProvider>
   );
 }
@@ -89,10 +103,10 @@ function ProfileSetup() {
   const navigate = useNavigate();
 
   const avatars = [
-    "https://via.placeholder.com/150/FF5733?text=Avatar1",
-    "https://via.placeholder.com/150/33FF57?text=Avatar2",
-    "https://via.placeholder.com/150/3357FF?text=Avatar3",
-    "https://via.placeholder.com/150/57FF33?text=Avatar4",
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=1",
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=2",
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=3",
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=4",
   ];
 
   const handleStart = async () => {
@@ -105,10 +119,10 @@ function ProfileSetup() {
         });
         navigate(`/chat/Général`);
       } catch (error) {
-        console.error("Erreur lors de la configuration du profil:", error);
+        console.error("Error during profile setup:", error);
       }
     } else {
-      alert("Veuillez choisir un pseudo et un avatar.");
+      alert("Please choose a username and avatar.");
     }
   };
 
@@ -119,21 +133,25 @@ function ProfileSetup() {
         flexDirection: "column",
         alignItems: "center",
         padding: 4,
-        maxWidth: "100%",
+        maxWidth: 400,
         margin: "auto",
+        backgroundColor: "background.paper",
+        borderRadius: 2,
+        boxShadow: 3,
+        mt: 4,
       }}
     >
       <Typography variant="h4" gutterBottom>
-        Configurez votre profil
+        Set up your profile
       </Typography>
       <TextField
-        label="Pseudo"
+        label="Username"
         value={username}
         onChange={(e) => setUsername(e.target.value)}
         sx={{ marginBottom: 2, width: "100%" }}
       />
       <Typography variant="h6" gutterBottom>
-        Choisissez un avatar :
+        Choose an avatar:
       </Typography>
       <Box
         sx={{
@@ -151,19 +169,24 @@ function ProfileSetup() {
             sx={{
               width: 60,
               height: 60,
-              border:
-                selectedAvatar === url
-                  ? "3px solid blue"
-                  : "3px solid transparent",
+              border: selectedAvatar === url ? "3px solid blue" : "3px solid transparent",
               cursor: "pointer",
               margin: 1,
+              transition: "transform 0.2s",
+              "&:hover": {
+                transform: "scale(1.1)",
+              },
             }}
             onClick={() => setSelectedAvatar(url)}
           />
         ))}
       </Box>
-      <Button variant="contained" onClick={handleStart}>
-        Commencer
+      <Button
+        variant="contained"
+        onClick={handleStart}
+        sx={{ width: "100%", mt: 2 }}
+      >
+        Start Chatting
       </Button>
     </Box>
   );
@@ -180,12 +203,15 @@ function ChatWithRooms({ toggleDarkMode, darkMode }) {
   ];
   const [currentUser, setCurrentUser] = useState(null);
   const [roomMessages, setRoomMessages] = useState({});
+  const [mobileOpen, setMobileOpen] = useState(false);
   const navigate = useNavigate();
+  const isMobile = useMediaQuery('(max-width:600px)');
+  const { roomId } = useParams();
 
   useEffect(() => {
     const user = auth.currentUser;
     setCurrentUser({
-      displayName: user?.displayName || "Utilisateur",
+      displayName: user?.displayName || "User",
       photoURL: user?.photoURL || "",
     });
 
@@ -200,81 +226,157 @@ function ChatWithRooms({ toggleDarkMode, darkMode }) {
     });
   }, []);
 
+  const handleDrawerToggle = () => {
+    setMobileOpen(!mobileOpen);
+  };
+
   const handleLogout = async () => {
     await signOut(auth);
     navigate("/");
   };
 
-  return (
-    <Box sx={{ display: "flex", height: "100vh" }}>
+  const drawer = (
+    <Box sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
       <Box
         sx={{
-          width: "25%",
-          backgroundColor: "#f5f5f5",
+          p: 2,
           display: "flex",
-          flexDirection: "column",
-          padding: 2,
+          alignItems: "center",
+          borderBottom: 1,
+          borderColor: "divider",
         }}
       >
-        <Box
+        <Avatar src={currentUser?.photoURL} sx={{ marginRight: 1 }} />
+        <Box sx={{ flexGrow: 1 }}>
+          <Typography variant="subtitle1">{currentUser?.displayName}</Typography>
+          <Typography variant="body2" color="text.secondary">
+            Online
+          </Typography>
+        </Box>
+      </Box>
+      <List sx={{ flexGrow: 1, overflow: "auto" }}>
+        {rooms.map((room) => (
+          <ListItem
+            key={room}
+            disablePadding
+            onClick={() => {
+              navigate(`/chat/${room}`);
+              if (isMobile) handleDrawerToggle();
+            }}
+          >
+            <Button
+              fullWidth
+              sx={{
+                justifyContent: "flex-start",
+                px: 3,
+                py: 1.5,
+                borderRadius: 0,
+                backgroundColor: room === roomId ? "action.selected" : "transparent",
+                "&:hover": {
+                  backgroundColor: "action.hover",
+                },
+                borderLeft: room === roomId ? 4 : 0,
+                borderColor: "primary.main",
+              }}
+            >
+              <Typography variant="body1">{room}</Typography>
+              <Typography
+                variant="caption"
+                sx={{ ml: "auto", color: "text.secondary" }}
+              >
+                {roomMessages[room] || 0}
+              </Typography>
+            </Button>
+          </ListItem>
+        ))}
+      </List>
+      <Box sx={{ p: 2, borderTop: 1, borderColor: "divider" }}>
+        <Button
+          fullWidth
+          variant="outlined"
+          color="primary"
+          onClick={handleLogout}
+        >
+          Logout
+        </Button>
+      </Box>
+    </Box>
+  );
+
+  return (
+    <Box sx={{ display: "flex", height: "100vh" }}>
+      <AppBar
+        position="fixed"
+        sx={{
+          width: { sm: `calc(100% - ${drawerWidth}px)` },
+          ml: { sm: `${drawerWidth}px` },
+        }}
+      >
+        <Toolbar>
+          <IconButton
+            color="inherit"
+            edge="start"
+            onClick={handleDrawerToggle}
+            sx={{ mr: 2, display: { sm: "none" } }}
+          >
+            <MenuIcon />
+          </IconButton>
+          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
+            {roomId}
+          </Typography>
+          <IconButton color="inherit" onClick={toggleDarkMode}>
+            {darkMode ? <Brightness7 /> : <Brightness4 />}
+          </IconButton>
+        </Toolbar>
+      </AppBar>
+      <Box
+        component="nav"
+        sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}
+      >
+        <Drawer
+          variant="temporary"
+          open={mobileOpen}
+          onClose={handleDrawerToggle}
+          ModalProps={{ keepMounted: true }}
           sx={{
-            display: "flex",
-            alignItems: "center",
-            marginBottom: 2,
+            display: { xs: "block", sm: "none" },
+            "& .MuiDrawer-paper": {
+              boxSizing: "border-box",
+              width: drawerWidth,
+            },
           }}
         >
-          <Avatar src={currentUser?.photoURL} sx={{ marginRight: 1 }} />
-          <Box>
-            <Typography variant="h6">{currentUser?.displayName}</Typography>
-            <Typography variant="body2">En ligne</Typography>
-          </Box>
-          <Button
-            variant="text"
-            sx={{ marginLeft: "auto" }}
-            onClick={handleLogout}
-          >
-            Déconnexion
-          </Button>
-        </Box>
-        <Typography variant="h5" gutterBottom>
-          Rooms
-        </Typography>
-        <List>
-          {rooms.map((room, index) => (
-            <ListItem
-              key={index}
-              sx={{
-                borderBottom: `3px solid ${
-                  room === window.location.pathname.split("/")[2]
-                    ? "green"
-                    : "transparent"
-                }`,
-                marginBottom: "10px",
-                padding: "10px",
-                cursor: "pointer",
-              }}
-              onClick={() => navigate(`/chat/${room}`)}
-            >
-              <ListItemText
-                primary={room}
-                secondary={`Messages : ${roomMessages[room] || 0}`}
-              />
-            </ListItem>
-          ))}
-        </List>
+          {drawer}
+        </Drawer>
+        <Drawer
+          variant="permanent"
+          sx={{
+            display: { xs: "none", sm: "block" },
+            "& .MuiDrawer-paper": {
+              boxSizing: "border-box",
+              width: drawerWidth,
+            },
+          }}
+          open
+        >
+          {drawer}
+        </Drawer>
       </Box>
-      <Box sx={{ flex: 1 }}>
+      <Box
+        component="main"
+        sx={{
+          flexGrow: 1,
+          width: { sm: `calc(100% - ${drawerWidth}px)` },
+          height: "100vh",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        <Toolbar />
         <Routes>
           <Route path="*" element={<ChatRoom />} />
         </Routes>
       </Box>
-      <Fab
-        color="primary"
-        sx={{ position: "fixed", bottom: 16, right: 16 }}
-        onClick={toggleDarkMode}
-      >
-        {darkMode ? <Brightness7 /> : <Brightness4 />}
-      </Fab>
     </Box>
   );
 }
@@ -285,6 +387,7 @@ function ChatRoom() {
   const [newMessage, setNewMessage] = useState("");
   const [emojiPickerVisible, setEmojiPickerVisible] = useState(false);
   const messagesEndRef = useRef(null);
+  const isMobile = useMediaQuery('(max-width:600px)');
 
   useEffect(() => {
     const q = query(
@@ -292,9 +395,7 @@ function ChatRoom() {
       orderBy("timestamp", "asc")
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setMessages(
-        snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
-      );
+      setMessages(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
     });
 
     return () => unsubscribe();
@@ -318,7 +419,7 @@ function ChatRoom() {
         setNewMessage("");
         setEmojiPickerVisible(false);
       } catch (error) {
-        console.error("Erreur lors de l'envoi du message:", error);
+        console.error("Error sending message:", error);
       }
     }
   };
@@ -328,46 +429,111 @@ function ChatRoom() {
   };
 
   return (
-    <Box sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
-      <Typography variant="h4">{roomId}</Typography>
-      <List sx={{ flexGrow: 1, overflowY: "auto", marginBottom: 2 }}>
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        backgroundColor: "background.paper",
+      }}
+    >
+      <List
+        sx={{
+          flexGrow: 1,
+          overflow: "auto",
+          padding: 2,
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
         {messages.map((msg) => (
-          <ListItem key={msg.id}>
-            <ListItemAvatar>
-              <Avatar src={msg.avatar} />
-            </ListItemAvatar>
-            <ListItemText primary={msg.user} secondary={msg.text} />
+          <ListItem
+            key={msg.id}
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: msg.user === auth.currentUser?.displayName ? "flex-end" : "flex-start",
+              padding: 1,
+            }}
+          >
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: msg.user === auth.currentUser?.displayName ? "row-reverse" : "row",
+                alignItems: "flex-start",
+                maxWidth: "80%",
+              }}
+            >
+              <ListItemAvatar sx={{ minWidth: 40 }}>
+                <Avatar src={msg.avatar} sx={{ width: 32, height: 32 }} />
+              </ListItemAvatar>
+              <Box
+                sx={{
+                  backgroundColor: msg.user === auth.currentUser?.displayName
+                    ? "primary.main"
+                    : "action.hover",
+                  color: msg.user === auth.currentUser?.displayName
+                    ? "primary.contrastText"
+                    : "text.primary",
+                  borderRadius: 2,
+                  padding: 1,
+                  maxWidth: "100%",
+                }}
+              >
+                <Typography variant="caption" sx={{ opacity: 0.7 }}>
+                  {msg.user}
+                </Typography>
+                <Typography variant="body1" sx={{ wordBreak: "break-word" }}>
+                  {msg.text}
+                </Typography>
+              </Box>
+            </Box>
           </ListItem>
         ))}
         <div ref={messagesEndRef} />
       </List>
-      {emojiPickerVisible && (
-        <Box
-          sx={{
-            position: "absolute",
-            bottom: "70px",
-            right: "10px",
-            zIndex: 1000,
-          }}
-        >
-          <EmojiPicker onEmojiClick={handleEmojiClick} />
+      <Box
+        sx={{
+          p: 2,
+          backgroundColor: "background.paper",
+          borderTop: 1,
+          borderColor: "divider",
+        }}
+      >
+        {emojiPickerVisible && (
+          <Box
+            sx={{
+              position: "absolute",
+              bottom: "80px",
+              right: isMobile ? "50%" : "20px",
+              transform: isMobile ? "translateX(50%)" : "none",
+              zIndex: 1000,
+            }}
+          >
+            <EmojiPicker onEmojiClick={handleEmojiClick} />
+          </Box>
+        )}
+        <Box sx={{ display: "flex", gap: 1 }}>
+          <TextField
+            fullWidth
+            placeholder="Type a message..."
+            value={newMessage}
+            onChange={(e) => setNewMessage(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()}
+            multiline
+            maxRows={4}
+            size="small"
+          />
+          <IconButton
+            color="primary"
+            onClick={() => setEmojiPickerVisible(!emojiPickerVisible)}
+          >
+            <EmojiEmotions />
+          </IconButton>
+          <IconButton color="primary" onClick={sendMessage}>
+            <SendIcon />
+          </IconButton>
         </Box>
-      )}
-      <Box sx={{ display: "flex", alignItems: "center", padding: 1 }}>
-        <TextField
-          fullWidth
-          placeholder="Écrivez un message..."
-          value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-          sx={{ marginRight: 1 }}
-        />
-        <Button onClick={() => setEmojiPickerVisible(!emojiPickerVisible)}>
-          Emoji
-        </Button>
-        <Button variant="contained" onClick={sendMessage}>
-          Envoyer
-        </Button>
       </Box>
     </Box>
   );
