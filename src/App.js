@@ -73,7 +73,10 @@ function App() {
       <Router>
         <Routes>
           <Route path="/" element={<ProfileSetup />} />
-          <Route path="/chat/:roomId/*" element={<ChatWithRooms toggleDarkMode={toggleDarkMode} />} />
+          <Route
+            path="/chat/:roomId/*"
+            element={<ChatWithRooms toggleDarkMode={toggleDarkMode} darkMode={darkMode} />}
+          />
         </Routes>
       </Router>
     </ThemeProvider>
@@ -166,7 +169,7 @@ function ProfileSetup() {
   );
 }
 
-function ChatWithRooms({ toggleDarkMode }) {
+function ChatWithRooms({ toggleDarkMode, darkMode }) {
   const rooms = [
     "Général",
     "Programmation",
