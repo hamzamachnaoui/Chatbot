@@ -92,55 +92,59 @@ function ProfileSetup() {
 
   return (
     <Box
-      sx={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        padding: 4,
-      }}
-    >
-      <Typography variant="h4" gutterBottom>
-        Configurez votre profil
-      </Typography>
-      <TextField
-        label="Pseudo"
-        value={username}
-        onChange={(e) => setUsername(e.target.value)}
-        sx={{ marginBottom: 2, width: "300px" }}
-      />
-      <Typography variant="h6" gutterBottom>
-        Choisissez un avatar :
-      </Typography>
-      <Box
+  sx={{
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    padding: 4,
+    maxWidth: "100%", // Adjusted for responsiveness
+    margin: "auto",
+  }}
+>
+  <Typography variant="h4" gutterBottom>
+    Configurez votre profil
+  </Typography>
+  <TextField
+    label="Pseudo"
+    value={username}
+    onChange={(e) => setUsername(e.target.value)}
+    sx={{ marginBottom: 2, width: "100%" }} 
+  />
+  <Typography variant="h6" gutterBottom>
+    Choisissez un avatar :
+  </Typography>
+  <Box
+    sx={{
+      display: "flex",
+      flexWrap: "wrap",
+      justifyContent: "center",
+      gap: 2,
+      marginBottom: 2,
+    }}
+  >
+    {avatars.map((url, index) => (
+      <Avatar
+        key={index}
+        src={url}
         sx={{
-          display: "flex",
-          flexWrap: "wrap",
-          justifyContent: "center",
-          gap: 2,
-          marginBottom: 2,
+          width: 60,
+          height: 60,
+          border:
+            selectedAvatar === url
+              ? "3px solid blue"
+              : "3px solid transparent",
+          cursor: "pointer",
+          margin: 1, 
         }}
-      >
-        {avatars.map((url, index) => (
-          <Avatar
-            key={index}
-            src={url}
-            sx={{
-              width: 60,
-              height: 60,
-              border:
-                selectedAvatar === url
-                  ? "3px solid blue"
-                  : "3px solid transparent",
-              cursor: "pointer",
-            }}
-            onClick={() => setSelectedAvatar(url)}
-          />
-        ))}
-      </Box>
-      <Button variant="contained" onClick={handleStart}>
-        Commencer
-      </Button>
-    </Box>
+        onClick={() => setSelectedAvatar(url)}
+      />
+    ))}
+  </Box>
+  <Button variant="contained" onClick={handleStart}>
+    Commencer
+  </Button>
+</Box>
+
   );
 }
 
