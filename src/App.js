@@ -15,7 +15,6 @@ import {
   onSnapshot,
   query,
   orderBy,
-  getDocs,
 } from "firebase/firestore";
 import {
   getAuth,
@@ -187,19 +186,15 @@ function ChatWithRooms({ toggleDarkMode }) {
       photoURL: user?.photoURL || "",
     });
 
-    const fetchRoomMessages = () => {
-      rooms.forEach((room) => {
-        const q = collection(db, "rooms", room, "messages");
-        onSnapshot(q, (snapshot) => {
-          setRoomMessages((prev) => ({
-            ...prev,
-            [room]: snapshot.size,
-          }));
-        });
+    rooms.forEach((room) => {
+      const q = collection(db, "rooms", room, "messages");
+      onSnapshot(q, (snapshot) => {
+        setRoomMessages((prev) => ({
+          ...prev,
+          [room]: snapshot.size,
+        }));
       });
-    };
-
-    fetchRoomMessages();
+    });
   }, []);
 
   const handleLogout = async () => {
