@@ -538,5 +538,4 @@ function ChatRoom() {
     </Box>
   );
 }
-
 export default App;
