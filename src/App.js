@@ -32,13 +32,12 @@ import {
   ListItemAvatar,
   Box,
   Typography,
+  createTheme,
+  ThemeProvider,
   CssBaseline,
-  AppBar,
-  Toolbar,
-  IconButton,
+  Fab,
 } from "@mui/material";
-import { createTheme, ThemeProvider } from "@mui/material/styles";
-import { Brightness4, Brightness7 } from "@mui/icons-material";
+import { DarkMode, LightMode } from "@mui/icons-material";
 import EmojiPicker from "emoji-picker-react";
 
 // Configuration Firebase
@@ -55,41 +54,43 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
+const lightTheme = createTheme({
+  palette: {
+    mode: "light",
+  },
+});
+
+const darkTheme = createTheme({
+  palette: {
+    mode: "dark",
+  },
+});
+
 function App() {
   const [darkMode, setDarkMode] = useState(false);
 
-  const theme = createTheme({
-    palette: {
-      mode: darkMode ? "dark" : "light",
-      background: {
-        default: darkMode ? "#121212" : "#f5f5f5",
-      },
-    },
-  });
+  const toggleDarkMode = () => setDarkMode(!darkMode);
 
   return (
-    <ThemeProvider theme={theme}>
+    <ThemeProvider theme={darkMode ? darkTheme : lightTheme}>
       <CssBaseline />
       <Router>
-        <AppBar position="static">
-          <Toolbar>
-            <Typography variant="h6" sx={{ flexGrow: 1 }}>
-              Chat Application
-            </Typography>
-            <IconButton
-              edge="end"
-              color="inherit"
-              onClick={() => setDarkMode(!darkMode)}
-            >
-              {darkMode ? <Brightness7 /> : <Brightness4 />}
-            </IconButton>
-          </Toolbar>
-        </AppBar>
         <Routes>
           <Route path="/" element={<ProfileSetup />} />
           <Route path="/chat/:roomId/*" element={<ChatWithRooms />} />
         </Routes>
       </Router>
+      <Fab
+        color="primary"
+        onClick={toggleDarkMode}
+        sx={{
+          position: "fixed",
+          bottom: 16,
+          right: 16,
+        }}
+      >
+        {darkMode ? <LightMode /> : <DarkMode />}
+      </Fab>
     </ThemeProvider>
   );
 }
@@ -163,7 +164,9 @@ function ProfileSetup() {
               width: 60,
               height: 60,
               border:
-                selectedAvatar === url ? "3px solid blue" : "3px solid transparent",
+                selectedAvatar === url
+                  ? "3px solid blue"
+                  : "3px solid transparent",
               cursor: "pointer",
               margin: 1,
             }}
@@ -188,6 +191,7 @@ function ChatWithRooms() {
     "Cloud Computing",
   ];
   const [currentUser, setCurrentUser] = useState(null);
+  const [roomMessages, setRoomMessages] = useState({});
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -196,6 +200,20 @@ function ChatWithRooms() {
       displayName: user?.displayName || "Utilisateur",
       photoURL: user?.photoURL || "",
     });
+
+    const fetchRoomMessages = () => {
+      rooms.forEach((room) => {
+        const q = collection(db, "rooms", room, "messages");
+        onSnapshot(q, (snapshot) => {
+          setRoomMessages((prev) => ({
+            ...prev,
+            [room]: snapshot.size,
+          }));
+        });
+      });
+    };
+
+    fetchRoomMessages();
   }, []);
 
   const handleLogout = async () => {
@@ -208,13 +226,19 @@ function ChatWithRooms() {
       <Box
         sx={{
           width: "25%",
-          backgroundColor: "background.default",
+          backgroundColor: "#f5f5f5",
           display: "flex",
           flexDirection: "column",
           padding: 2,
         }}
       >
-        <Box sx={{ display: "flex", alignItems: "center", marginBottom: 2 }}>
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            marginBottom: 2,
+          }}
+        >
           <Avatar src={currentUser?.photoURL} sx={{ marginRight: 1 }} />
           <Box>
             <Typography variant="h6">{currentUser?.displayName}</Typography>
@@ -236,14 +260,21 @@ function ChatWithRooms() {
             <ListItem
               key={index}
               sx={{
-                borderBottom: `3px solid transparent`,
+                borderBottom: `3px solid ${
+                  room === window.location.pathname.split("/")[2]
+                    ? "green"
+                    : "transparent"
+                }`,
                 marginBottom: "10px",
                 padding: "10px",
                 cursor: "pointer",
               }}
               onClick={() => navigate(`/chat/${room}`)}
             >
-              <ListItemText primary={room} />
+              <ListItemText
+                primary={room}
+                secondary={`Messages : ${roomMessages[room] || 0}`}
+              />
             </ListItem>
           ))}
         </List>
@@ -270,7 +301,9 @@ function ChatRoom() {
       orderBy("timestamp", "asc")
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setMessages(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+      setMessages(
+        snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
+      );
     });
 
     return () => unsubscribe();
