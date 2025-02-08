@@ -129,13 +129,11 @@ function ProfileSetup() {
 
     try {
       if (isLogin) {
-        // Login
         await signInWithEmailAndPassword(auth, `${username}@chat.com`, password);
         navigate(`/chat/Général`);
       } else {
-        // Register
         if (!selectedAvatar) {
-          setError("Please select an avatar");
+          setError("Veuillez sélectionner un avatar");
           return;
         }
         const userCredential = await createUserWithEmailAndPassword(
@@ -170,7 +168,7 @@ function ProfileSetup() {
       }}
     >
       <Typography variant="h4" gutterBottom>
-        {isLogin ? "Login" : "Register"}
+        {isLogin ? "Se connecter" : "Registe"}
       </Typography>
       {error && (
         <Alert severity="error" sx={{ width: "100%", mb: 2 }}>
@@ -230,14 +228,14 @@ function ProfileSetup() {
         onClick={handleAuth}
         sx={{ width: "100%", mt: 2 }}
       >
-        {isLogin ? "Login" : "Register"}
+        {isLogin ? "Se connecter" : "Registre"}
       </Button>
       <Button
         variant="text"
         onClick={() => setIsLogin(!isLogin)}
         sx={{ mt: 2 }}
       >
-        {isLogin ? "Need an account? Register" : "Already have an account? Login"}
+        {isLogin ? "Besoin d'un compte ? Registre" : "Vous avez déjà un compte ? Se connecter"}
       </Button>
     </Box>
   );
