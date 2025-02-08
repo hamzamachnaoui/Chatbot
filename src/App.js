@@ -24,6 +24,7 @@ import {
   updateProfile,
   signOut,
 } from "firebase/auth";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import {
   Avatar,
   TextField,
@@ -52,6 +53,7 @@ import {
   Menu as MenuIcon,
   Send as SendIcon,
   EmojiEmotions,
+  Image as ImageIcon,
 } from "@mui/icons-material";
 import EmojiPicker from "emoji-picker-react";
 import { grey } from "@mui/material/colors";
@@ -68,87 +70,175 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
+const storage = getStorage(app);
 
 const drawerWidth = 240;
 
 function App() {
   const [darkMode, setDarkMode] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [user, setUser] = useState(null);
+  const [rooms, setRooms] = useState([]);
+  const [error, setError] = useState("");
+  const navigate = useNavigate();
+
   const theme = createTheme({
     palette: {
       mode: darkMode ? "dark" : "light",
       background: {
         default: darkMode ? grey[900] : grey[100],
-        paper: darkMode ? grey[800] : grey[50],
-      },
-      primary: {
-        main: "#f9b613",
-        contrastText: "#000000",
+        paper: darkMode ? grey[800] : "#fff",
       },
     },
   });
 
-  const toggleDarkMode = () => setDarkMode(!darkMode);
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      setUser(user);
+      if (user) {
+        loadRooms();
+      } else {
+        navigate("/login");
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const loadRooms = async () => {
+    const q = query(collection(db, "rooms"), orderBy("name"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setRooms(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+    });
+    return unsubscribe;
+  };
+
+  const handleDrawerToggle = () => {
+    setMobileOpen(!mobileOpen);
+  };
+
+  const drawer = (
+    <Box sx={{ p: 2 }}>
+      <List>
+        {rooms.map((room) => (
+          <ListItem
+            button
+            key={room.id}
+            onClick={() => {
+              navigate(`/room/${room.id}`);
+              if (mobileOpen) handleDrawerToggle();
+            }}
+          >
+            <ListItemText primary={room.name} />
+          </ListItem>
+        ))}
+      </List>
+    </Box>
+  );
 
   return (
     <ThemeProvider theme={theme}>
-      <Box sx={{ backgroundColor: "background.default", minHeight: "100vh" }}>
-        <Router>
+      <Box sx={{ display: "flex", minHeight: "100vh", bgcolor: "background.default" }}>
+        <AppBar
+          position="fixed"
+          sx={{
+            width: { sm: `calc(100% - ${drawerWidth}px)` },
+            ml: { sm: `${drawerWidth}px` },
+          }}
+        >
+          <Toolbar>
+            <IconButton
+              color="inherit"
+              edge="start"
+              onClick={handleDrawerToggle}
+              sx={{ mr: 2, display: { sm: "none" } }}
+            >
+              <MenuIcon />
+            </IconButton>
+            <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+              Chat App
+            </Typography>
+            <IconButton color="inherit" onClick={() => setDarkMode(!darkMode)}>
+              {darkMode ? <Brightness7 /> : <Brightness4 />}
+            </IconButton>
+            {user && (
+              <Button color="inherit" onClick={() => signOut(auth)}>
+                Logout
+              </Button>
+            )}
+          </Toolbar>
+        </AppBar>
+        <Box
+          component="nav"
+          sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}
+        >
+          <Drawer
+            variant="temporary"
+            open={mobileOpen}
+            onClose={handleDrawerToggle}
+            ModalProps={{ keepMounted: true }}
+            sx={{
+              display: { xs: "block", sm: "none" },
+              "& .MuiDrawer-paper": {
+                boxSizing: "border-box",
+                width: drawerWidth,
+              },
+            }}
+          >
+            {drawer}
+          </Drawer>
+          <Drawer
+            variant="permanent"
+            sx={{
+              display: { xs: "none", sm: "block" },
+              "& .MuiDrawer-paper": {
+                boxSizing: "border-box",
+                width: drawerWidth,
+              },
+            }}
+            open
+          >
+            {drawer}
+          </Drawer>
+        </Box>
+        <Box
+          component="main"
+          sx={{
+            flexGrow: 1,
+            p: 0,
+            width: { sm: `calc(100% - ${drawerWidth}px)` },
+            height: "100vh",
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          <Toolbar />
+          {error && (
+            <Alert severity="error" onClose={() => setError("")}>
+              {error}
+            </Alert>
+          )}
           <Routes>
-            <Route path="/" element={<ProfileSetup />} />
-            <Route
-              path="/chat/:roomId/*"
-              element={<ChatWithRooms toggleDarkMode={toggleDarkMode} darkMode={darkMode} />}
-            />
+            <Route path="/login" element={<Login setError={setError} />} />
+            <Route path="/signup" element={<SignUp setError={setError} />} />
+            <Route path="/room/:roomId" element={<ChatRoom />} />
           </Routes>
-        </Router>
+        </Box>
       </Box>
     </ThemeProvider>
   );
 }
 
-function ProfileSetup() {
-  const [isLogin, setIsLogin] = useState(true);
-  const [username, setUsername] = useState("");
+function Login({ setError }) {
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [selectedAvatar, setSelectedAvatar] = useState("");
-  const [error, setError] = useState("");
   const navigate = useNavigate();
 
-  const avatars = [
-    "https://api.dicebear.com/7.x/avataaars/svg?seed=1",
-    "https://api.dicebear.com/7.x/avataaars/svg?seed=2",
-    "https://api.dicebear.com/7.x/avataaars/svg?seed=3",
-    "https://api.dicebear.com/7.x/avataaars/svg?seed=4",
-  ];
-
-  const handleAuth = async () => {
-    if (!username.trim() || !password) {
-      setError("Please fill in all fields");
-      return;
-    }
-
+  const handleLogin = async (e) => {
+    e.preventDefault();
     try {
-      if (isLogin) {
-        // Login
-        await signInWithEmailAndPassword(auth, `${username}@chat.com`, password);
-        navigate(`/chat/Général`);
-      } else {
-        // Register
-        if (!selectedAvatar) {
-          setError("Please select an avatar");
-          return;
-        }
-        const userCredential = await createUserWithEmailAndPassword(
-          auth,
-          `${username}@chat.com`,
-          password
-        );
-        await updateProfile(userCredential.user, {
-          displayName: username,
-          photoURL: selectedAvatar,
-        });
-        navigate(`/chat/Général`);
-      }
+      await signInWithEmailAndPassword(auth, email, password);
+      navigate("/");
     } catch (error) {
       setError(error.message);
     }
@@ -160,303 +250,134 @@ function ProfileSetup() {
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        padding: 4,
-        maxWidth: 400,
-        margin: "auto",
-        backgroundColor: "background.paper",
-        borderRadius: 2,
-        boxShadow: 3,
-        mt: 4,
+        justifyContent: "center",
+        height: "100%",
+        p: 2,
       }}
     >
-      <Typography variant="h4" gutterBottom>
-        {isLogin ? "Login" : "Register"}
-      </Typography>
-      {error && (
-        <Alert severity="error" sx={{ width: "100%", mb: 2 }}>
-          {error}
-        </Alert>
-      )}
-      <TextField
-        label="Username"
-        value={username}
-        onChange={(e) => setUsername(e.target.value)}
-        sx={{ marginBottom: 2, width: "100%" }}
-      />
-      <TextField
-        label="Password"
-        type="password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        sx={{ marginBottom: 2, width: "100%" }}
-      />
-      {!isLogin && (
-        <>
-          <Typography variant="h6" gutterBottom>
-            Choose an avatar:
-          </Typography>
-          <Box
-            sx={{
-              display: "flex",
-              flexWrap: "wrap",
-              justifyContent: "center",
-              gap: 2,
-              marginBottom: 2,
-            }}
+      <Paper elevation={3} sx={{ p: 4, maxWidth: 400, width: "100%" }}>
+        <Typography variant="h5" component="h1" gutterBottom>
+          Login
+        </Typography>
+        <form onSubmit={handleLogin}>
+          <TextField
+            fullWidth
+            label="Email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            margin="normal"
+            required
+          />
+          <TextField
+            fullWidth
+            label="Password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            margin="normal"
+            required
+          />
+          <Button
+            fullWidth
+            variant="contained"
+            type="submit"
+            sx={{ mt: 2 }}
           >
-            {avatars.map((url, index) => (
-              <Avatar
-                key={index}
-                src={url}
-                sx={{
-                  width: 60,
-                  height: 60,
-                  border: selectedAvatar === url ? "3px solid #f9b613" : "3px solid transparent",
-                  cursor: "pointer",
-                  margin: 1,
-                  transition: "transform 0.2s",
-                  "&:hover": {
-                    transform: "scale(1.1)",
-                  },
-                }}
-                onClick={() => setSelectedAvatar(url)}
-              />
-            ))}
-          </Box>
-        </>
-      )}
-      <Button
-        variant="contained"
-        onClick={handleAuth}
-        sx={{ width: "100%", mt: 2 }}
-      >
-        {isLogin ? "Login" : "Register"}
-      </Button>
-      <Button
-        variant="text"
-        onClick={() => setIsLogin(!isLogin)}
-        sx={{ mt: 2 }}
-      >
-        {isLogin ? "Need an account? Register" : "Already have an account? Login"}
-      </Button>
+            Login
+          </Button>
+        </form>
+        <Button
+          fullWidth
+          onClick={() => navigate("/signup")}
+          sx={{ mt: 2 }}
+        >
+          Create Account
+        </Button>
+      </Paper>
     </Box>
   );
 }
 
-function ChatWithRooms({ toggleDarkMode, darkMode }) {
-  const rooms = [
-    "Général",
-    "Programmation",
-    "IA",
-    "Développement Web",
-    "Sécurité",
-    "Cloud Computing",
-  ];
-  const [currentUser, setCurrentUser] = useState(null);
-  const [roomMessages, setRoomMessages] = useState({});
-  const [newMessageRooms, setNewMessageRooms] = useState(new Set());
-  const [mobileOpen, setMobileOpen] = useState(false);
+function SignUp({ setError }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
   const navigate = useNavigate();
-  const isMobile = useMediaQuery('(max-width:600px)');
-  const { roomId } = useParams();
 
-  useEffect(() => {
-    const user = auth.currentUser;
-    setCurrentUser({
-      displayName: user?.displayName || "User",
-      photoURL: user?.photoURL || "",
-    });
-
-    rooms.forEach((room) => {
-      const q = query(
-        collection(db, "rooms", room, "messages"),
-        orderBy("timestamp", "desc"),
-        where("timestamp", ">", new Date(Date.now() - 1000))
-      );
-      
-      onSnapshot(q, (snapshot) => {
-        if (snapshot.docs.length > 0 && room !== roomId) {
-          setNewMessageRooms(prev => new Set([...prev, room]));
-        }
-        setRoomMessages(prev => ({
-          ...prev,
-          [room]: snapshot.size,
-        }));
+  const handleSignUp = async (e) => {
+    e.preventDefault();
+    try {
+      const { user } = await createUserWithEmailAndPassword(auth, email, password);
+      await updateProfile(user, {
+        displayName: name,
+        photoURL: `https://api.dicebear.com/6.x/initials/svg?seed=${name}`,
       });
-    });
-  }, [roomId]);
-
-  const handleDrawerToggle = () => {
-    setMobileOpen(!mobileOpen);
+      navigate("/");
+    } catch (error) {
+      setError(error.message);
+    }
   };
-
-  const handleLogout = async () => {
-    await signOut(auth);
-    navigate("/");
-  };
-
-  const handleRoomClick = (room) => {
-    setNewMessageRooms(prev => {
-      const updated = new Set(prev);
-      updated.delete(room);
-      return updated;
-    });
-    navigate(`/chat/${room}`);
-    if (isMobile) handleDrawerToggle();
-  };
-
-  const drawer = (
-    <Box sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
-      <Box
-        sx={{
-          p: 2,
-          display: "flex",
-          alignItems: "center",
-          borderBottom: 1,
-          borderColor: "divider",
-        }}
-      >
-        <Avatar src={currentUser?.photoURL} sx={{ marginRight: 1 }} />
-        <Box sx={{ flexGrow: 1 }}>
-          <Typography variant="subtitle1">{currentUser?.displayName}</Typography>
-          <Typography variant="body2" color="text.secondary">
-            Online
-          </Typography>
-        </Box>
-      </Box>
-      <List sx={{ flexGrow: 1, overflow: "auto" }}>
-        {rooms.map((room) => (
-          <ListItem
-            key={room}
-            disablePadding
-            onClick={() => handleRoomClick(room)}
-          >
-            <Button
-              fullWidth
-              sx={{
-                justifyContent: "flex-start",
-                px: 3,
-                py: 1.5,
-                borderRadius: 0,
-                backgroundColor: room === roomId ? "action.selected" : 
-                  newMessageRooms.has(room) ? "primary.main" : "transparent",
-                "&:hover": {
-                  backgroundColor: "action.hover",
-                },
-                borderLeft: room === roomId ? 4 : 0,
-                borderColor: "primary.main",
-                animation: newMessageRooms.has(room) ? "pulse 2s infinite" : "none",
-                "@keyframes pulse": {
-                  "0%": {
-                    opacity: 1,
-                  },
-                  "50%": {
-                    opacity: 0.7,
-                  },
-                  "100%": {
-                    opacity: 1,
-                  },
-                },
-              }}
-            >
-              <Typography variant="body1">{room}</Typography>
-              <Typography
-                variant="caption"
-                sx={{ ml: "auto", color: "text.secondary" }}
-              >
-                {roomMessages[room] || 0}
-              </Typography>
-            </Button>
-          </ListItem>
-        ))}
-      </List>
-      <Box sx={{ p: 2, borderTop: 1, borderColor: "divider" }}>
-        <Button
-          fullWidth
-          variant="outlined"
-          color="primary"
-          onClick={handleLogout}
-        >
-          Logout
-        </Button>
-      </Box>
-    </Box>
-  );
 
   return (
-    <Box sx={{ display: "flex", height: "100vh" }}>
-      <AppBar
-        position="fixed"
-        sx={{
-          width: { sm: `calc(100% - ${drawerWidth}px)` },
-          ml: { sm: `${drawerWidth}px` },
-        }}
-      >
-        <Toolbar>
-          <IconButton
-            color="inherit"
-            edge="start"
-            onClick={handleDrawerToggle}
-            sx={{ mr: 2, display: { sm: "none" } }}
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        height: "100%",
+        p: 2,
+      }}
+    >
+      <Paper elevation={3} sx={{ p: 4, maxWidth: 400, width: "100%" }}>
+        <Typography variant="h5" component="h1" gutterBottom>
+          Sign Up
+        </Typography>
+        <form onSubmit={handleSignUp}>
+          <TextField
+            fullWidth
+            label="Name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            margin="normal"
+            required
+          />
+          <TextField
+            fullWidth
+            label="Email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            margin="normal"
+            required
+          />
+          <TextField
+            fullWidth
+            label="Password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            margin="normal"
+            required
+          />
+          <Button
+            fullWidth
+            variant="contained"
+            type="submit"
+            sx={{ mt: 2 }}
           >
-            <MenuIcon />
-          </IconButton>
-          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            {roomId}
-          </Typography>
-          <IconButton color="inherit" onClick={toggleDarkMode}>
-            {darkMode ? <Brightness7 /> : <Brightness4 />}
-          </IconButton>
-        </Toolbar>
-      </AppBar>
-      <Box
-        component="nav"
-        sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}
-      >
-        <Drawer
-          variant="temporary"
-          open={mobileOpen}
-          onClose={handleDrawerToggle}
-          ModalProps={{ keepMounted: true }}
-          sx={{
-            display: { xs: "block", sm: "none" },
-            "& .MuiDrawer-paper": {
-              boxSizing: "border-box",
-              width: drawerWidth,
-            },
-          }}
+            Sign Up
+          </Button>
+        </form>
+        <Button
+          fullWidth
+          onClick={() => navigate("/login")}
+          sx={{ mt: 2 }}
         >
-          {drawer}
-        </Drawer>
-        <Drawer
-          variant="permanent"
-          sx={{
-            display: { xs: "none", sm: "block" },
-            "& .MuiDrawer-paper": {
-              boxSizing: "border-box",
-              width: drawerWidth,
-            },
-          }}
-          open
-        >
-          {drawer}
-        </Drawer>
-      </Box>
-      <Box
-        component="main"
-        sx={{
-          flexGrow: 1,
-          width: { sm: `calc(100% - ${drawerWidth}px)` },
-          height: "100vh",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        <Toolbar />
-        <Routes>
-          <Route path="*" element={<ChatRoom />} />
-        </Routes>
-      </Box>
+          Already have an account? Login
+        </Button>
+      </Paper>
     </Box>
   );
 }
@@ -466,7 +387,9 @@ function ChatRoom() {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const [emojiPickerVisible, setEmojiPickerVisible] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
   const isMobile = useMediaQuery('(max-width:600px)');
 
   useEffect(() => {
@@ -486,6 +409,37 @@ function ChatRoom() {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages]);
+
+  const handleImageUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      alert('Please upload an image file (JPEG, PNG, GIF, or WEBP)');
+      return;
+    }
+
+    try {
+      setUploading(true);
+      const storageRef = ref(storage, `images/${Date.now()}_${file.name}`);
+      await uploadBytes(storageRef, file);
+      const imageUrl = await getDownloadURL(storageRef);
+
+      await addDoc(collection(db, "rooms", roomId, "messages"), {
+        text: "",
+        imageUrl,
+        user: auth.currentUser.displayName,
+        avatar: auth.currentUser.photoURL,
+        timestamp: new Date(),
+      });
+    } catch (error) {
+      console.error("Error uploading image:", error);
+      alert('Failed to upload image. Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const sendMessage = async () => {
     if (newMessage.trim()) {
@@ -552,18 +506,36 @@ function ChatRoom() {
                   backgroundColor: msg.user === auth.currentUser?.displayName
                     ? "primary.main"
                     : "action.hover",
-                  color: "text.primary",
+                  color: msg.user === auth.currentUser?.displayName
+                    ? "primary.contrastText"
+                    : "text.primary",
                   borderRadius: 2,
                   padding: 1,
                   maxWidth: "100%",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.12)",
                 }}
               >
                 <Typography variant="caption" sx={{ opacity: 0.7 }}>
                   {msg.user}
                 </Typography>
-                <Typography variant="body1" sx={{ wordBreak: "break-word" }}>
-                  {msg.text}
-                </Typography>
+                {msg.text && (
+                  <Typography variant="body1" sx={{ wordBreak: "break-word" }}>
+                    {msg.text}
+                  </Typography>
+                )}
+                {msg.imageUrl && (
+                  <Box
+                    component="img"
+                    src={msg.imageUrl}
+                    alt="Shared image"
+                    sx={{
+                      maxWidth: "100%",
+                      maxHeight: "300px",
+                      borderRadius: 1,
+                      mt: msg.text ? 1 : 0,
+                    }}
+                  />
+                )}
               </Box>
             </Box>
           </ListItem>
@@ -590,28 +562,46 @@ function ChatRoom() {
                 zIndex: 1000,
               }}
             >
-              <EmojiPicker onEmojiClick={handleEmojiClick} />
+              <Paper elevation={3}>
+                <EmojiPicker onEmojiClick={handleEmojiClick} />
+              </Paper>
             </Box>
           </ClickAwayListener>
         )}
         <Box sx={{ display: "flex", gap: 1 }}>
+          <input
+            type="file"
+            accept="image/*"
+            style={{ display: 'none' }}
+            ref={fileInputRef}
+            onChange={handleImageUpload}
+          />
+          <IconButton
+            color="primary"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+          >
+            <ImageIcon />
+          </IconButton>
           <TextField
             fullWidth
-            placeholder="Type a message..."
+            placeholder={uploading ? "Uploading image..." : "Type a message..."}
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()}
             multiline
             maxRows={4}
             size="small"
+            disabled={uploading}
           />
           <IconButton
             color="primary"
             onClick={() => setEmojiPickerVisible(!emojiPickerVisible)}
+            disabled={uploading}
           >
             <EmojiEmotions />
           </IconButton>
-          <IconButton color="primary" onClick={sendMessage}>
+          <IconButton color="primary" onClick={sendMessage} disabled={uploading}>
             <SendIcon />
           </IconButton>
         </Box>
