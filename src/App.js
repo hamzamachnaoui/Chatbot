@@ -74,156 +74,42 @@ const storage = getStorage(app);
 
 const drawerWidth = 240;
 
+function AppWrapper() {
+  return (
+    <Router>
+      <App />
+    </Router>
+  );
+}
+
 function App() {
   const [darkMode, setDarkMode] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [user, setUser] = useState(null);
-  const [rooms, setRooms] = useState([]);
-  const [error, setError] = useState("");
-  const navigate = useNavigate();
-
   const theme = createTheme({
     palette: {
       mode: darkMode ? "dark" : "light",
       background: {
         default: darkMode ? grey[900] : grey[100],
-        paper: darkMode ? grey[800] : "#fff",
+        paper: darkMode ? grey[800] : grey[50],
+      },
+      primary: {
+        main: "#f9b613",
+        contrastText: "#000000",
       },
     },
   });
 
-  useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      setUser(user);
-      if (user) {
-        loadRooms();
-      } else {
-        navigate("/login");
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  const loadRooms = async () => {
-    const q = query(collection(db, "rooms"), orderBy("name"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setRooms(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
-    });
-    return unsubscribe;
-  };
-
-  const handleDrawerToggle = () => {
-    setMobileOpen(!mobileOpen);
-  };
-
-  const drawer = (
-    <Box sx={{ p: 2 }}>
-      <List>
-        {rooms.map((room) => (
-          <ListItem
-            button
-            key={room.id}
-            onClick={() => {
-              navigate(`/room/${room.id}`);
-              if (mobileOpen) handleDrawerToggle();
-            }}
-          >
-            <ListItemText primary={room.name} />
-          </ListItem>
-        ))}
-      </List>
-    </Box>
-  );
+  const toggleDarkMode = () => setDarkMode(!darkMode);
 
   return (
     <ThemeProvider theme={theme}>
-      <Box sx={{ display: "flex", minHeight: "100vh", bgcolor: "background.default" }}>
-        <AppBar
-          position="fixed"
-          sx={{
-            width: { sm: `calc(100% - ${drawerWidth}px)` },
-            ml: { sm: `${drawerWidth}px` },
-          }}
-        >
-          <Toolbar>
-            <IconButton
-              color="inherit"
-              edge="start"
-              onClick={handleDrawerToggle}
-              sx={{ mr: 2, display: { sm: "none" } }}
-            >
-              <MenuIcon />
-            </IconButton>
-            <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-              Chat App
-            </Typography>
-            <IconButton color="inherit" onClick={() => setDarkMode(!darkMode)}>
-              {darkMode ? <Brightness7 /> : <Brightness4 />}
-            </IconButton>
-            {user && (
-              <Button color="inherit" onClick={() => signOut(auth)}>
-                Logout
-              </Button>
-            )}
-          </Toolbar>
-        </AppBar>
-        <Box
-          component="nav"
-          sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}
-        >
-          <Drawer
-            variant="temporary"
-            open={mobileOpen}
-            onClose={handleDrawerToggle}
-            ModalProps={{ keepMounted: true }}
-            sx={{
-              display: { xs: "block", sm: "none" },
-              "& .MuiDrawer-paper": {
-                boxSizing: "border-box",
-                width: drawerWidth,
-              },
-            }}
-          >
-            {drawer}
-          </Drawer>
-          <Drawer
-            variant="permanent"
-            sx={{
-              display: { xs: "none", sm: "block" },
-              "& .MuiDrawer-paper": {
-                boxSizing: "border-box",
-                width: drawerWidth,
-              },
-            }}
-            open
-          >
-            {drawer}
-          </Drawer>
-        </Box>
-        <Box
-          component="main"
-          sx={{
-            flexGrow: 1,
-            p: 0,
-            width: { sm: `calc(100% - ${drawerWidth}px)` },
-            height: "100vh",
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
-          <Toolbar />
-          {error && (
-            <Alert severity="error" onClose={() => setError("")}>
-              {error}
-            </Alert>
-          )}
-          <Routes>
-            <Route path="/login" element={<Login setError={setError} />} />
-            <Route path="/signup" element={<SignUp setError={setError} />} />
-            <Route path="/room/:roomId" element={<ChatRoom />} />
-          </Routes>
-        </Box>
+      <Box sx={{ backgroundColor: "background.default", minHeight: "100vh" }}>
+        <Routes>
+          <Route path="/" element={<ProfileSetup />} />
+          <Route
+            path="/chat/:roomId/*"
+            element={<ChatWithRooms toggleDarkMode={toggleDarkMode} darkMode={darkMode} />}
+          />
+        </Routes>
       </Box>
     </ThemeProvider>
   );
@@ -610,4 +496,4 @@ function ChatRoom() {
   );
 }
 
-export default App;
+export default AppWrapper;
