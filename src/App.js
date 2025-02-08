@@ -14,10 +14,13 @@ import {
   onSnapshot,
   query,
   orderBy,
+  where,
+  getDocs,
 } from "firebase/firestore";
 import {
   getAuth,
-  signInAnonymously,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   updateProfile,
   signOut,
 } from "firebase/auth";
@@ -39,6 +42,9 @@ import {
   Drawer,
   AppBar,
   Toolbar,
+  Alert,
+  Paper,
+  ClickAwayListener,
 } from "@mui/material";
 import {
   Brightness4,
@@ -48,7 +54,7 @@ import {
   EmojiEmotions,
 } from "@mui/icons-material";
 import EmojiPicker from "emoji-picker-react";
-import { grey, blue } from "@mui/material/colors";
+import { grey } from "@mui/material/colors";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBfHNrbuUOJsZhts8P2Z0MUzQ0FkPXb0pk",
@@ -74,7 +80,10 @@ function App() {
         default: darkMode ? grey[900] : grey[100],
         paper: darkMode ? grey[800] : grey[50],
       },
-      primary: blue,
+      primary: {
+        main: "#f9b613",
+        contrastText: "#000000",
+      },
     },
   });
 
@@ -98,8 +107,11 @@ function App() {
 }
 
 function ProfileSetup() {
+  const [isLogin, setIsLogin] = useState(true);
   const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [selectedAvatar, setSelectedAvatar] = useState("");
+  const [error, setError] = useState("");
   const navigate = useNavigate();
 
   const avatars = [
@@ -109,20 +121,36 @@ function ProfileSetup() {
     "https://api.dicebear.com/7.x/avataaars/svg?seed=4",
   ];
 
-  const handleStart = async () => {
-    if (username.trim() && selectedAvatar) {
-      try {
-        const userCredential = await signInAnonymously(auth);
+  const handleAuth = async () => {
+    if (!username.trim() || !password) {
+      setError("Please fill in all fields");
+      return;
+    }
+
+    try {
+      if (isLogin) {
+        // Login
+        await signInWithEmailAndPassword(auth, `${username}@chat.com`, password);
+        navigate(`/chat/Général`);
+      } else {
+        // Register
+        if (!selectedAvatar) {
+          setError("Please select an avatar");
+          return;
+        }
+        const userCredential = await createUserWithEmailAndPassword(
+          auth,
+          `${username}@chat.com`,
+          password
+        );
         await updateProfile(userCredential.user, {
           displayName: username,
           photoURL: selectedAvatar,
         });
         navigate(`/chat/Général`);
-      } catch (error) {
-        console.error("Error during profile setup:", error);
       }
-    } else {
-      alert("Please choose a username and avatar.");
+    } catch (error) {
+      setError(error.message);
     }
   };
 
@@ -142,51 +170,74 @@ function ProfileSetup() {
       }}
     >
       <Typography variant="h4" gutterBottom>
-        Set up your profile
+        {isLogin ? "Login" : "Register"}
       </Typography>
+      {error && (
+        <Alert severity="error" sx={{ width: "100%", mb: 2 }}>
+          {error}
+        </Alert>
+      )}
       <TextField
         label="Username"
         value={username}
         onChange={(e) => setUsername(e.target.value)}
         sx={{ marginBottom: 2, width: "100%" }}
       />
-      <Typography variant="h6" gutterBottom>
-        Choose an avatar:
-      </Typography>
-      <Box
-        sx={{
-          display: "flex",
-          flexWrap: "wrap",
-          justifyContent: "center",
-          gap: 2,
-          marginBottom: 2,
-        }}
-      >
-        {avatars.map((url, index) => (
-          <Avatar
-            key={index}
-            src={url}
+      <TextField
+        label="Password"
+        type="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        sx={{ marginBottom: 2, width: "100%" }}
+      />
+      {!isLogin && (
+        <>
+          <Typography variant="h6" gutterBottom>
+            Choose an avatar:
+          </Typography>
+          <Box
             sx={{
-              width: 60,
-              height: 60,
-              border: selectedAvatar === url ? "3px solid blue" : "3px solid transparent",
-              cursor: "pointer",
-              margin: 1,
-              transition: "transform 0.2s",
-              "&:hover": {
-                transform: "scale(1.1)",
-              },
+              display: "flex",
+              flexWrap: "wrap",
+              justifyContent: "center",
+              gap: 2,
+              marginBottom: 2,
             }}
-            onClick={() => setSelectedAvatar(url)}
-          />
-        ))}
-      </Box>
+          >
+            {avatars.map((url, index) => (
+              <Avatar
+                key={index}
+                src={url}
+                sx={{
+                  width: 60,
+                  height: 60,
+                  border: selectedAvatar === url ? "3px solid #f9b613" : "3px solid transparent",
+                  cursor: "pointer",
+                  margin: 1,
+                  transition: "transform 0.2s",
+                  "&:hover": {
+                    transform: "scale(1.1)",
+                  },
+                }}
+                onClick={() => setSelectedAvatar(url)}
+              />
+            ))}
+          </Box>
+        </>
+      )}
       <Button
         variant="contained"
-        onClick={handleStart}
+        onClick={handleAuth}
         sx={{ width: "100%", mt: 2 }}
       >
-        Start Chatting
+        {isLogin ? "Login" : "Register"}
+      </Button>
+      <Button
+        variant="text"
+        onClick={() => setIsLogin(!isLogin)}
+        sx={{ mt: 2 }}
+      >
+        {isLogin ? "Need an account? Register" : "Already have an account? Login"}
       </Button>
     </Box>
   );
@@ -203,6 +254,7 @@ function ChatWithRooms({ toggleDarkMode, darkMode }) {
   ];
   const [currentUser, setCurrentUser] = useState(null);
   const [roomMessages, setRoomMessages] = useState({});
+  const [newMessageRooms, setNewMessageRooms] = useState(new Set());
   const [mobileOpen, setMobileOpen] = useState(false);
   const navigate = useNavigate();
   const isMobile = useMediaQuery('(max-width:600px)');
@@ -216,15 +268,23 @@ function ChatWithRooms({ toggleDarkMode, darkMode }) {
     });
 
     rooms.forEach((room) => {
-      const q = collection(db, "rooms", room, "messages");
+      const q = query(
+        collection(db, "rooms", room, "messages"),
+        orderBy("timestamp", "desc"),
+        where("timestamp", ">", new Date(Date.now() - 1000))
+      );
+      
       onSnapshot(q, (snapshot) => {
-        setRoomMessages((prev) => ({
+        if (snapshot.docs.length > 0 && room !== roomId) {
+          setNewMessageRooms(prev => new Set([...prev, room]));
+        }
+        setRoomMessages(prev => ({
           ...prev,
           [room]: snapshot.size,
         }));
       });
     });
-  }, []);
+  }, [roomId]);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -233,6 +293,16 @@ function ChatWithRooms({ toggleDarkMode, darkMode }) {
   const handleLogout = async () => {
     await signOut(auth);
     navigate("/");
+  };
+
+  const handleRoomClick = (room) => {
+    setNewMessageRooms(prev => {
+      const updated = new Set(prev);
+      updated.delete(room);
+      return updated;
+    });
+    navigate(`/chat/${room}`);
+    if (isMobile) handleDrawerToggle();
   };
 
   const drawer = (
@@ -259,10 +329,7 @@ function ChatWithRooms({ toggleDarkMode, darkMode }) {
           <ListItem
             key={room}
             disablePadding
-            onClick={() => {
-              navigate(`/chat/${room}`);
-              if (isMobile) handleDrawerToggle();
-            }}
+            onClick={() => handleRoomClick(room)}
           >
             <Button
               fullWidth
@@ -271,12 +338,25 @@ function ChatWithRooms({ toggleDarkMode, darkMode }) {
                 px: 3,
                 py: 1.5,
                 borderRadius: 0,
-                backgroundColor: room === roomId ? "action.selected" : "transparent",
+                backgroundColor: room === roomId ? "action.selected" : 
+                  newMessageRooms.has(room) ? "primary.main" : "transparent",
                 "&:hover": {
                   backgroundColor: "action.hover",
                 },
                 borderLeft: room === roomId ? 4 : 0,
                 borderColor: "primary.main",
+                animation: newMessageRooms.has(room) ? "pulse 2s infinite" : "none",
+                "@keyframes pulse": {
+                  "0%": {
+                    opacity: 1,
+                  },
+                  "50%": {
+                    opacity: 0.7,
+                  },
+                  "100%": {
+                    opacity: 1,
+                  },
+                },
               }}
             >
               <Typography variant="body1">{room}</Typography>
@@ -472,9 +552,7 @@ function ChatRoom() {
                   backgroundColor: msg.user === auth.currentUser?.displayName
                     ? "primary.main"
                     : "action.hover",
-                  color: msg.user === auth.currentUser?.displayName
-                    ? "primary.contrastText"
-                    : "text.primary",
+                  color: "text.primary",
                   borderRadius: 2,
                   padding: 1,
                   maxWidth: "100%",
@@ -498,20 +576,23 @@ function ChatRoom() {
           backgroundColor: "background.paper",
           borderTop: 1,
           borderColor: "divider",
+          position: "relative",
         }}
       >
         {emojiPickerVisible && (
-          <Box
-            sx={{
-              position: "absolute",
-              bottom: "80px",
-              right: isMobile ? "50%" : "20px",
-              transform: isMobile ? "translateX(50%)" : "none",
-              zIndex: 1000,
-            }}
-          >
-            <EmojiPicker onEmojiClick={handleEmojiClick} />
-          </Box>
+          <ClickAwayListener onClickAway={() => setEmojiPickerVisible(false)}>
+            <Box
+              sx={{
+                position: "absolute",
+                bottom: "80px",
+                right: isMobile ? "50%" : "20px",
+                transform: isMobile ? "translateX(50%)" : "none",
+                zIndex: 1000,
+              }}
+            >
+              <EmojiPicker onEmojiClick={handleEmojiClick} />
+            </Box>
+          </ClickAwayListener>
         )}
         <Box sx={{ display: "flex", gap: 1 }}>
           <TextField
