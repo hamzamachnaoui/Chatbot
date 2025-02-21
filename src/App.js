@@ -57,12 +57,12 @@ import EmojiPicker from "emoji-picker-react";
 import { grey } from "@mui/material/colors";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBfHNrbuUOJsZhts8P2Z0MUzQ0FkPXb0pk",
-  authDomain: "chatbot-93bd7.firebaseapp.com",
-  projectId: "chatbot-93bd7",
-  storageBucket: "chatbot-93bd7.appspot.com",
-  messagingSenderId: "540146161895",
-  appId: "1:540146161895:web:f0fdc7c12d093cce976a42",
+  apiKey: "AIzaSyBDQzO-dvX4WGdA-PnNjtp5fzA9c731WeM",
+  authDomain: "chatbot01-150a9.firebaseapp.com",
+  projectId: "chatbot01-150a9",
+  storageBucket: "chatbot01-150a9.firebasestorage.app",
+  messagingSenderId: "483828302225",
+  appId: "1:483828302225:web:256b81e69cd954caf31a30"
 };
 
 const app = initializeApp(firebaseConfig);
