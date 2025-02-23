@@ -56,6 +56,7 @@ import {
 import EmojiPicker from "emoji-picker-react";
 import { grey } from "@mui/material/colors";
 
+
 const firebaseConfig = {
   apiKey: "AIzaSyBDQzO-dvX4WGdA-PnNjtp5fzA9c731WeM",
   authDomain: "chatbot01-150a9.firebaseapp.com",
@@ -64,6 +65,7 @@ const firebaseConfig = {
   messagingSenderId: "483828302225",
   appId: "1:483828302225:web:256b81e69cd954caf31a30"
 };
+
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
