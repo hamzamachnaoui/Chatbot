@@ -58,12 +58,12 @@ import { grey } from "@mui/material/colors";
 
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBDQzO-dvX4WGdA-PnNjtp5fzA9c731WeM",
-  authDomain: "chatbot01-150a9.firebaseapp.com",
-  projectId: "chatbot01-150a9",
-  storageBucket: "chatbot01-150a9.firebasestorage.app",
-  messagingSenderId: "483828302225",
-  appId: "1:483828302225:web:256b81e69cd954caf31a30"
+  apiKey: "AIzaSyBg6oo11lEpfF3qxMhohxfmRYMJUvumj8Q",
+  authDomain: "chatbot03-e3425.firebaseapp.com",
+  projectId: "chatbot03-e3425",
+  storageBucket: "chatbot03-e3425.firebasestorage.app",
+  messagingSenderId: "535367937162",
+  appId: "1:535367937162:web:3a850c50604139fc42d173"
 };
 
 
