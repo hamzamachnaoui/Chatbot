@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate, Navigate } from "react-router-dom";
-import { Box } from "@mui/material";
+import { Box, Alert } from "@mui/material";
 import {
   collection,
   addDoc,
@@ -45,6 +45,7 @@ export default function ChatPage() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [firestoreError, setFirestoreError] = useState(null);
 
   const isInitialLoadRef = useRef(true);
   const previousMessagesCountRef = useRef(0);
@@ -53,42 +54,56 @@ export default function ChatPage() {
   useEffect(() => {
     if (!roomId) return;
     isInitialLoadRef.current = true;
+    setFirestoreError(null);
 
     const q = query(
       collection(db, "rooms", roomId, "messages"),
       orderBy("timestamp", "asc")
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const loaded = snapshot.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-      }));
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const loaded = snapshot.docs.map((d) => ({
+          id: d.id,
+          ...d.data(),
+        }));
 
-      // Play soft chime if a new message arrives from another user
-      if (
-        !isInitialLoadRef.current &&
-        loaded.length > previousMessagesCountRef.current
-      ) {
-        const latest = loaded[loaded.length - 1];
+        // Play soft chime if a new message arrives from another user
         if (
-          latest &&
-          latest.userId !== currentUser?.uid &&
-          latest.user !== currentUser?.displayName
+          !isInitialLoadRef.current &&
+          loaded.length > previousMessagesCountRef.current
         ) {
-          playNotificationSound();
+          const latest = loaded[loaded.length - 1];
+          if (
+            latest &&
+            latest.userId !== currentUser?.uid &&
+            latest.user !== currentUser?.displayName
+          ) {
+            playNotificationSound();
+          }
+        }
+
+        isInitialLoadRef.current = false;
+        previousMessagesCountRef.current = loaded.length;
+
+        setMessages(loaded);
+        setRoomMessagesCount((prev) => ({
+          ...prev,
+          [roomId]: loaded.length,
+        }));
+      },
+      (error) => {
+        console.error("Erreur Firestore onSnapshot:", error);
+        if (error.code === "permission-denied") {
+          setFirestoreError(
+            "La base de données Cloud Firestore n'est pas encore activée ou ses règles de sécurité bloquent l'accès. Activez-la dans la console Firebase pour synchroniser les messages entre fenêtres."
+          );
+        } else {
+          setFirestoreError(error.message);
         }
       }
-
-      isInitialLoadRef.current = false;
-      previousMessagesCountRef.current = loaded.length;
-
-      setMessages(loaded);
-      setRoomMessagesCount((prev) => ({
-        ...prev,
-        [roomId]: loaded.length,
-      }));
-    });
+    );
 
     return () => unsubscribe();
   }, [roomId, currentUser]);
@@ -233,6 +248,12 @@ export default function ChatPage() {
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
         />
+
+        {firestoreError && (
+          <Alert severity="warning" sx={{ m: 1, borderRadius: 2 }}>
+            {firestoreError}
+          </Alert>
+        )}
 
         <MessageList
           messages={displayedMessages}

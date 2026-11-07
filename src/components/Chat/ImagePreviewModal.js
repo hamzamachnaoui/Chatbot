@@ -11,6 +11,7 @@ import {
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import SendIcon from "@mui/icons-material/Send";
+import DownloadIcon from "@mui/icons-material/Download";
 
 export function ImageSendModal({ open, imageSrc, onSend, onCancel }) {
   const [caption, setCaption] = useState("");
@@ -138,20 +139,32 @@ export function ImageViewerModal({ open, imageSrc, onClose }) {
         },
       }}
     >
-      <IconButton
-        onClick={onClose}
-        sx={{
-          position: "absolute",
-          top: 10,
-          right: 10,
-          color: "#ffffff",
-          backgroundColor: "rgba(0,0,0,0.5)",
-          "&:hover": { backgroundColor: "rgba(0,0,0,0.8)" },
-          zIndex: 10,
-        }}
-      >
-        <CloseIcon />
-      </IconButton>
+      <Box sx={{ position: "absolute", top: 10, right: 10, display: "flex", gap: 1, zIndex: 10 }}>
+        {imageSrc && (
+          <IconButton
+            component="a"
+            href={imageSrc}
+            download="photo_chat.jpg"
+            sx={{
+              color: "#ffffff",
+              backgroundColor: "rgba(0,0,0,0.5)",
+              "&:hover": { backgroundColor: "rgba(0,0,0,0.8)" },
+            }}
+          >
+            <DownloadIcon />
+          </IconButton>
+        )}
+        <IconButton
+          onClick={onClose}
+          sx={{
+            color: "#ffffff",
+            backgroundColor: "rgba(0,0,0,0.5)",
+            "&:hover": { backgroundColor: "rgba(0,0,0,0.8)" },
+          }}
+        >
+          <CloseIcon />
+        </IconButton>
+      </Box>
       <DialogContent
         sx={{
           p: 2,
