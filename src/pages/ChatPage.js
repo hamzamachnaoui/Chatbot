@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate, Navigate } from "react-router-dom";
 import { Box } from "@mui/material";
 import {
@@ -19,6 +19,7 @@ import ChatHeader from "../components/Chat/ChatHeader";
 import MessageList from "../components/Chat/MessageList";
 import MessageInput from "../components/Chat/MessageInput";
 import LoadingScreen from "../components/Common/LoadingScreen";
+import { playNotificationSound } from "../utils/sound";
 
 const DEFAULT_ROOMS = [
   "Général",
@@ -43,10 +44,15 @@ export default function ChatPage() {
   const [newMessageRooms, setNewMessageRooms] = useState(new Set());
   const [mobileOpen, setMobileOpen] = useState(false);
   const [sending, setSending] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const isInitialLoadRef = useRef(true);
+  const previousMessagesCountRef = useRef(0);
 
   // Listen to messages in the active room
   useEffect(() => {
     if (!roomId) return;
+    isInitialLoadRef.current = true;
 
     const q = query(
       collection(db, "rooms", roomId, "messages"),
@@ -58,6 +64,25 @@ export default function ChatPage() {
         id: d.id,
         ...d.data(),
       }));
+
+      // Play soft chime if a new message arrives from another user
+      if (
+        !isInitialLoadRef.current &&
+        loaded.length > previousMessagesCountRef.current
+      ) {
+        const latest = loaded[loaded.length - 1];
+        if (
+          latest &&
+          latest.userId !== currentUser?.uid &&
+          latest.user !== currentUser?.displayName
+        ) {
+          playNotificationSound();
+        }
+      }
+
+      isInitialLoadRef.current = false;
+      previousMessagesCountRef.current = loaded.length;
+
       setMessages(loaded);
       setRoomMessagesCount((prev) => ({
         ...prev,
@@ -66,7 +91,7 @@ export default function ChatPage() {
     });
 
     return () => unsubscribe();
-  }, [roomId]);
+  }, [roomId, currentUser]);
 
   // Track room message counts & notifications
   useEffect(() => {
@@ -101,6 +126,7 @@ export default function ChatPage() {
   }, [roomId, newMessageRooms]);
 
   const handleSelectRoom = (newRoom) => {
+    setSearchQuery("");
     navigate(`/chat/${encodeURIComponent(newRoom)}`);
   };
 
@@ -108,17 +134,19 @@ export default function ChatPage() {
     if (!rooms.includes(newRoomName)) {
       setRooms((prev) => [...prev, newRoomName]);
     }
+    setSearchQuery("");
     navigate(`/chat/${encodeURIComponent(newRoomName)}`);
   };
 
-  const handleSendMessage = async ({ text, imageUrl }) => {
-    if (!currentUser || (!text && !imageUrl)) return;
+  const handleSendMessage = async ({ text, imageUrl, audioUrl }) => {
+    if (!currentUser || (!text && !imageUrl && !audioUrl)) return;
 
     try {
       setSending(true);
       await addDoc(collection(db, "rooms", roomId, "messages"), {
         text: text || "",
         imageUrl: imageUrl || null,
+        audioUrl: audioUrl || null,
         user: currentUser.displayName || "Utilisateur",
         userId: currentUser.uid,
         avatar: currentUser.photoURL || "",
@@ -152,6 +180,15 @@ export default function ChatPage() {
       console.error("Erreur lors de la réaction:", error);
     }
   };
+
+  // Filter messages by search query
+  const displayedMessages = searchQuery.trim()
+    ? messages.filter(
+        (m) =>
+          (m.text && m.text.toLowerCase().includes(searchQuery.toLowerCase())) ||
+          (m.user && m.user.toLowerCase().includes(searchQuery.toLowerCase()))
+      )
+    : messages;
 
   if (loading) {
     return <LoadingScreen message="Connexion à vos salons..." />;
@@ -193,12 +230,15 @@ export default function ChatPage() {
           messageCount={messages.length}
           onOpenMobileDrawer={() => setMobileOpen(true)}
           drawerWidth={DRAWER_WIDTH}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
         />
 
         <MessageList
-          messages={messages}
+          messages={displayedMessages}
           onDelete={handleDeleteMessage}
           onReact={handleReactMessage}
+          isSearching={Boolean(searchQuery.trim())}
         />
 
         <MessageInput onSendMessage={handleSendMessage} disabled={sending} />

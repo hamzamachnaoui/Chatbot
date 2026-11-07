@@ -25,3 +25,4 @@ export function playNotificationSound() {
     // Audio autoplay restrictions or unsupported
   }
 }
+
