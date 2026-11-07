@@ -26,9 +26,11 @@ import LogoutIcon from "@mui/icons-material/Logout";
 import TagIcon from "@mui/icons-material/Tag";
 import PaletteIcon from "@mui/icons-material/Palette";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
+import EditIcon from "@mui/icons-material/Edit";
 import { useAuth } from "../../contexts/AuthContext";
 import { useChatTheme } from "../../contexts/ChatThemeContext";
 import ThemeSelectorModal from "./ThemeSelectorModal";
+import EditProfileModal from "./EditProfileModal";
 
 export default function Sidebar({
   rooms,
@@ -47,6 +49,7 @@ export default function Sidebar({
   const [themeModalOpen, setThemeModalOpen] = useState(false);
   const [newRoomDialogOpen, setNewRoomDialogOpen] = useState(false);
   const [newRoomName, setNewRoomName] = useState("");
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
 
   const filteredRooms = rooms.filter((r) =>
     r.toLowerCase().includes(search.toLowerCase())
@@ -86,22 +89,34 @@ export default function Sidebar({
           borderColor: isDarkMode ? "#222d34" : "#e9edef",
         }}
       >
-        <Avatar
-          src={currentUser?.photoURL}
-          alt={currentUser?.displayName}
-          sx={{
-            width: 40,
-            height: 40,
-            border: `2px solid ${currentTheme.accentColor}`,
-          }}
-        >
-          {currentUser?.displayName?.[0]?.toUpperCase()}
-        </Avatar>
+        <Tooltip title="Modifier mon profil">
+          <Avatar
+            src={currentUser?.photoURL}
+            alt={currentUser?.displayName}
+            onClick={() => setProfileModalOpen(true)}
+            sx={{
+              width: 40,
+              height: 40,
+              cursor: "pointer",
+              border: `2px solid ${currentTheme.accentColor}`,
+              transition: "transform 0.15s ease",
+              "&:hover": { transform: "scale(1.08)" },
+            }}
+          >
+            {currentUser?.displayName?.[0]?.toUpperCase()}
+          </Avatar>
+        </Tooltip>
 
-        <Box sx={{ flexGrow: 1, overflow: "hidden" }}>
-          <Typography variant="subtitle2" fontWeight="bold" noWrap>
-            {currentUser?.displayName || "Utilisateur"}
-          </Typography>
+        <Box
+          sx={{ flexGrow: 1, overflow: "hidden", cursor: "pointer" }}
+          onClick={() => setProfileModalOpen(true)}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+            <Typography variant="subtitle2" fontWeight="bold" noWrap>
+              {currentUser?.displayName || "Utilisateur"}
+            </Typography>
+            <EditIcon sx={{ fontSize: 13, color: isDarkMode ? "#8696a0" : "#667781" }} />
+          </Box>
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
             <Box
               sx={{
@@ -286,6 +301,11 @@ export default function Sidebar({
       <ThemeSelectorModal
         open={themeModalOpen}
         onClose={() => setThemeModalOpen(false)}
+      />
+
+      <EditProfileModal
+        open={profileModalOpen}
+        onClose={() => setProfileModalOpen(false)}
       />
 
       {/* Dialog for creating a new room */}

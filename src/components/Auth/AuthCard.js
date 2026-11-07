@@ -8,8 +8,10 @@ import {
   Alert,
   Paper,
   CircularProgress,
+  Divider,
 } from "@mui/material";
 import ChatIcon from "@mui/icons-material/Chat";
+import FlashOnIcon from "@mui/icons-material/FlashOn";
 import { useAuth } from "../../contexts/AuthContext";
 import { useChatTheme } from "../../contexts/ChatThemeContext";
 
@@ -22,23 +24,39 @@ const PRESET_AVATARS = [
   "https://api.dicebear.com/7.x/avataaars/svg?seed=Chloe",
 ];
 
-function getFriendlyFirebaseError(error) {
+function getFriendlyFirebaseError(error, isLogin) {
   if (!error) return "";
   const code = error.code || "";
-  if (code === "auth/invalid-credential" || code === "auth/wrong-password" || code === "auth/user-not-found") {
-    return "Nom d'utilisateur ou mot de passe incorrect.";
+
+  if (code === "auth/operation-not-allowed") {
+    return "La méthode Email/Mot de passe n'est pas activée dans votre console Firebase (Authentication > Sign-in method). Activez-la ou utilisez l'accès Invité.";
+  }
+  if (
+    code === "auth/invalid-credential" ||
+    code === "auth/wrong-password" ||
+    code === "auth/user-not-found"
+  ) {
+    return isLogin
+      ? "Identifiants incorrects ou compte inexistant. Avez-vous créé ce compte ? Cliquez sur 'S'inscrire' ci-dessous pour créer un profil."
+      : "Erreur d'identifiant.";
   }
   if (code === "auth/email-already-in-use") {
-    return "Ce nom d'utilisateur est déjà utilisé.";
+    return "Ce nom d'utilisateur est déjà utilisé. Cliquez sur 'Se connecter' ou choisissez un autre pseudo.";
   }
   if (code === "auth/weak-password") {
     return "Le mot de passe doit comporter au moins 6 caractères.";
+  }
+  if (code === "auth/invalid-email") {
+    return "Nom d'utilisateur invalide. Évitez les caractères spéciaux.";
+  }
+  if (code === "auth/too-many-requests") {
+    return "Trop de tentatives échouées. Veuillez patienter quelques instants avant de réessayer.";
   }
   return error.message || "Une erreur est survenue lors de l'authentification.";
 }
 
 export default function AuthCard({ onSuccess }) {
-  const { login, register } = useAuth();
+  const { login, register, loginAsGuest } = useAuth();
   const { currentTheme, isDarkMode } = useChatTheme();
 
   const [isLogin, setIsLogin] = useState(true);
@@ -47,6 +65,7 @@ export default function AuthCard({ onSuccess }) {
   const [selectedAvatar, setSelectedAvatar] = useState(PRESET_AVATARS[0]);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [guestSubmitting, setGuestSubmitting] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -71,9 +90,28 @@ export default function AuthCard({ onSuccess }) {
       }
       if (onSuccess) onSuccess();
     } catch (err) {
-      setError(getFriendlyFirebaseError(err));
+      console.error("Firebase auth error details:", err);
+      setError(getFriendlyFirebaseError(err, isLogin));
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleGuestLogin = async () => {
+    try {
+      setGuestSubmitting(true);
+      setError("");
+      await loginAsGuest(username.trim() || undefined, selectedAvatar);
+      if (onSuccess) onSuccess();
+    } catch (err) {
+      console.error("Guest login error:", err);
+      if (err.code === "auth/operation-not-allowed") {
+        setError("L'authentification anonyme doit être activée dans la console Firebase (Authentication > Sign-in method > Anonyme).");
+      } else {
+        setError(getFriendlyFirebaseError(err, false));
+      }
+    } finally {
+      setGuestSubmitting(false);
     }
   };
 
@@ -141,7 +179,7 @@ export default function AuthCard({ onSuccess }) {
             label="Nom d'utilisateur"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            disabled={submitting}
+            disabled={submitting || guestSubmitting}
             sx={{ mb: 2 }}
             InputLabelProps={{
               sx: { color: isDarkMode ? "#8696a0" : undefined },
@@ -155,7 +193,7 @@ export default function AuthCard({ onSuccess }) {
             label="Mot de passe"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            disabled={submitting}
+            disabled={submitting || guestSubmitting}
             sx={{ mb: 2.5 }}
             InputLabelProps={{
               sx: { color: isDarkMode ? "#8696a0" : undefined },
@@ -194,9 +232,7 @@ export default function AuthCard({ onSuccess }) {
                         border: isSelected ? `3px solid ${currentTheme.accentColor}` : "2px solid transparent",
                         transform: isSelected ? "scale(1.1)" : "scale(1)",
                         transition: "all 0.2s ease",
-                        "&:hover": {
-                          transform: "scale(1.1)",
-                        },
+                        "&:hover": { transform: "scale(1.1)" },
                       }}
                     />
                   );
@@ -210,7 +246,7 @@ export default function AuthCard({ onSuccess }) {
             type="submit"
             fullWidth
             variant="contained"
-            disabled={submitting}
+            disabled={submitting || guestSubmitting}
             sx={{
               py: 1.3,
               borderRadius: 2,
@@ -240,9 +276,9 @@ export default function AuthCard({ onSuccess }) {
               setIsLogin(!isLogin);
               setError("");
             }}
-            disabled={submitting}
+            disabled={submitting || guestSubmitting}
             sx={{
-              mt: 2,
+              mt: 1.5,
               textTransform: "none",
               color: isDarkMode ? "#8696a0" : "#54656f",
               "&:hover": { color: currentTheme.accentColor },
@@ -252,9 +288,40 @@ export default function AuthCard({ onSuccess }) {
               ? "Pas encore de compte ? S'inscrire"
               : "Vous avez déjà un compte ? Se connecter"}
           </Button>
+
+          <Divider sx={{ my: 2, borderColor: isDarkMode ? "#2a3942" : "#e9edef" }}>
+            <Typography variant="caption" sx={{ color: isDarkMode ? "#8696a0" : "#667781" }}>
+              OU
+            </Typography>
+          </Divider>
+
+          {/* Fast Guest Mode Button */}
+          <Button
+            fullWidth
+            variant="outlined"
+            onClick={handleGuestLogin}
+            disabled={submitting || guestSubmitting}
+            startIcon={<FlashOnIcon />}
+            sx={{
+              py: 1,
+              borderRadius: 2,
+              borderColor: isDarkMode ? "#2a3942" : "#d1d5db",
+              color: isDarkMode ? "#e9edef" : "#111b21",
+              textTransform: "none",
+              "&:hover": {
+                borderColor: currentTheme.accentColor,
+                backgroundColor: isDarkMode ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
+              },
+            }}
+          >
+            {guestSubmitting ? (
+              <CircularProgress size={20} sx={{ color: "inherit" }} />
+            ) : (
+              "Accès direct en tant qu'invité"
+            )}
+          </Button>
         </form>
       </Paper>
     </Box>
   );
 }
-

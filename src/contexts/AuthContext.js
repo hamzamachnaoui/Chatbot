@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  signInAnonymously,
   updateProfile,
   signOut,
   onAuthStateChanged,
@@ -9,6 +10,22 @@ import {
 import { auth } from "../config/firebase";
 
 const AuthContext = createContext(null);
+
+// Safely format any username to a valid RFC email for Firebase Auth
+export function formatUsernameToEmail(username) {
+  if (!username) return "";
+  if (username.includes("@")) return username.trim();
+
+  // Normalize: remove accents, replace spaces/special chars with underscores
+  const clean = username
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9_.-]/g, "_");
+
+  return `${clean || "user"}@chat.com`;
+}
 
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
@@ -24,20 +41,38 @@ export function AuthProvider({ children }) {
   }, []);
 
   const login = async (username, password) => {
-    const email = username.includes("@") ? username.trim() : `${username.trim().toLowerCase()}@chat.com`;
+    const email = formatUsernameToEmail(username);
     return signInWithEmailAndPassword(auth, email, password);
   };
 
   const register = async (username, password, avatarUrl) => {
     const cleanUsername = username.trim();
-    const email = cleanUsername.includes("@") ? cleanUsername : `${cleanUsername.toLowerCase()}@chat.com`;
+    const email = formatUsernameToEmail(cleanUsername);
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     await updateProfile(userCredential.user, {
       displayName: cleanUsername,
       photoURL: avatarUrl,
     });
-    // Update local state with latest profile
-    setCurrentUser({ ...userCredential.user, displayName: cleanUsername, photoURL: avatarUrl });
+    setCurrentUser({
+      ...userCredential.user,
+      displayName: cleanUsername,
+      photoURL: avatarUrl,
+    });
+    return userCredential.user;
+  };
+
+  const loginAsGuest = async (nickname, avatarUrl) => {
+    const cleanNickname = nickname?.trim() || `Invité_${Math.floor(1000 + Math.random() * 9000)}`;
+    const userCredential = await signInAnonymously(auth);
+    await updateProfile(userCredential.user, {
+      displayName: cleanNickname,
+      photoURL: avatarUrl || "https://api.dicebear.com/7.x/avataaars/svg?seed=Guest",
+    });
+    setCurrentUser({
+      ...userCredential.user,
+      displayName: cleanNickname,
+      photoURL: avatarUrl || "https://api.dicebear.com/7.x/avataaars/svg?seed=Guest",
+    });
     return userCredential.user;
   };
 
@@ -45,11 +80,22 @@ export function AuthProvider({ children }) {
     return signOut(auth);
   };
 
-  const updateUserAvatar = async (newAvatarUrl) => {
+  const updateUserProfile = async ({ displayName, photoURL }) => {
     if (auth.currentUser) {
-      await updateProfile(auth.currentUser, { photoURL: newAvatarUrl });
-      setCurrentUser({ ...auth.currentUser, photoURL: newAvatarUrl });
+      const updates = {};
+      if (displayName) updates.displayName = displayName.trim();
+      if (photoURL) updates.photoURL = photoURL;
+      await updateProfile(auth.currentUser, updates);
+      setCurrentUser((prev) => ({
+        ...prev,
+        displayName: updates.displayName || prev?.displayName,
+        photoURL: updates.photoURL || prev?.photoURL,
+      }));
     }
+  };
+
+  const updateUserAvatar = async (newAvatarUrl) => {
+    return updateUserProfile({ photoURL: newAvatarUrl });
   };
 
   const value = {
@@ -57,8 +103,10 @@ export function AuthProvider({ children }) {
     loading,
     login,
     register,
+    loginAsGuest,
     logout,
     updateUserAvatar,
+    updateUserProfile,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -71,4 +119,3 @@ export function useAuth() {
   }
   return context;
 }
-
