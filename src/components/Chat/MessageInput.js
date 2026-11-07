@@ -1,14 +1,18 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   Box,
   TextField,
   IconButton,
   ClickAwayListener,
   CircularProgress,
+  Typography,
 } from "@mui/material";
 import EmojiEmotionsIcon from "@mui/icons-material/EmojiEmotions";
 import SendIcon from "@mui/icons-material/Send";
 import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
+import MicIcon from "@mui/icons-material/Mic";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import FiberManualRecordIcon from "@mui/icons-material/FiberManualRecord";
 import EmojiPicker, { Theme as EmojiTheme } from "emoji-picker-react";
 import { useChatTheme } from "../../contexts/ChatThemeContext";
 import { ImageSendModal } from "./ImagePreviewModal";
@@ -50,14 +54,34 @@ function compressImage(file, maxWidth = 1024, maxHeight = 1024, quality = 0.75) 
   });
 }
 
+function formatRecordTime(seconds) {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s < 10 ? "0" : ""}${s}`;
+}
+
 export default function MessageInput({ onSendMessage, disabled = false }) {
   const { currentTheme, isDarkMode } = useChatTheme();
   const [text, setText] = useState("");
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [pendingImage, setPendingImage] = useState(null);
   const [processingImage, setProcessingImage] = useState(false);
+
+  // Audio recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const recordingTimerRef = useRef(null);
+
   const fileInputRef = useRef(null);
   const textInputRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+    };
+  }, []);
 
   const handleSendText = () => {
     if (!text.trim() || disabled) return;
@@ -90,7 +114,6 @@ export default function MessageInput({ onSendMessage, disabled = false }) {
       console.error("Failed to process image:", err);
     } finally {
       setProcessingImage(false);
-      // Reset input value so user can re-select same file if desired
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
@@ -103,6 +126,64 @@ export default function MessageInput({ onSendMessage, disabled = false }) {
       });
       setPendingImage(null);
     }
+  };
+
+  // Voice recording handlers
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingSeconds(0);
+
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingSeconds((prev) => prev + 1);
+      }, 1000);
+    } catch (err) {
+      console.error("Microphone access denied or error:", err);
+      alert("Impossible d'accéder au microphone. Veuillez autoriser l'accès.");
+    }
+  };
+
+  const cancelRecording = () => {
+    if (mediaRecorderRef.current) {
+      mediaRecorderRef.current.stream.getTracks().forEach((track) => track.stop());
+      mediaRecorderRef.current.stop();
+    }
+    clearInterval(recordingTimerRef.current);
+    setIsRecording(false);
+    setRecordingSeconds(0);
+    audioChunksRef.current = [];
+  };
+
+  const stopAndSendRecording = () => {
+    if (!mediaRecorderRef.current) return;
+
+    mediaRecorderRef.current.onstop = () => {
+      const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+      const reader = new FileReader();
+      reader.readAsDataURL(audioBlob);
+      reader.onloadend = () => {
+        const base64Audio = reader.result;
+        onSendMessage({ audioUrl: base64Audio });
+      };
+      mediaRecorderRef.current.stream.getTracks().forEach((track) => track.stop());
+    };
+
+    mediaRecorderRef.current.stop();
+    clearInterval(recordingTimerRef.current);
+    setIsRecording(false);
+    setRecordingSeconds(0);
   };
 
   return (
@@ -153,87 +234,150 @@ export default function MessageInput({ onSendMessage, disabled = false }) {
         </ClickAwayListener>
       )}
 
-      {/* Emoji Button */}
-      <IconButton
-        onClick={() => setEmojiOpen(!emojiOpen)}
-        sx={{
-          color: emojiOpen ? currentTheme.accentColor : isDarkMode ? "#8696a0" : "#54656f",
-          "&:hover": { color: currentTheme.accentColor },
-        }}
-      >
-        <EmojiEmotionsIcon />
-      </IconButton>
-
-      {/* Photo Attachment Button */}
-      <IconButton
-        onClick={() => fileInputRef.current?.click()}
-        disabled={processingImage}
-        sx={{
-          color: isDarkMode ? "#8696a0" : "#54656f",
-          "&:hover": { color: currentTheme.accentColor },
-        }}
-      >
-        {processingImage ? (
-          <CircularProgress size={22} sx={{ color: currentTheme.accentColor }} />
-        ) : (
-          <AddPhotoAlternateIcon />
-        )}
-      </IconButton>
-
-      {/* Input Field */}
-      <TextField
-        fullWidth
-        inputRef={textInputRef}
-        placeholder="Tapez un message..."
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={handleKeyDown}
-        multiline
-        maxRows={4}
-        size="small"
-        sx={{
-          "& .MuiOutlinedInput-root": {
+      {isRecording ? (
+        /* Recording UI Bar */
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            width: "100%",
             backgroundColor: currentTheme.surfaceColor,
             borderRadius: 3,
-            color: isDarkMode ? "#e9edef" : "#111b21",
-            "& fieldset": {
-              borderColor: "transparent",
-            },
-            "&:hover fieldset": {
-              borderColor: "transparent",
-            },
-            "&.Mui-focused fieldset": {
-              borderColor: currentTheme.accentColor,
-            },
-            padding: "8px 14px",
-          },
-          "& .MuiInputBase-input::placeholder": {
-            color: isDarkMode ? "#8696a0" : "#667781",
-            opacity: 1,
-          },
-        }}
-      />
+            px: 2,
+            py: 1,
+            gap: 2,
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <FiberManualRecordIcon
+              sx={{
+                color: "#ef4444",
+                fontSize: 18,
+                animation: "pulse 1s infinite",
+                "@keyframes pulse": {
+                  "0%": { opacity: 1 },
+                  "50%": { opacity: 0.3 },
+                  "100%": { opacity: 1 },
+                },
+              }}
+            />
+            <Typography variant="body2" fontWeight="bold" sx={{ color: "#ef4444" }}>
+              {formatRecordTime(recordingSeconds)}
+            </Typography>
+          </Box>
 
-      {/* Send Button */}
-      <IconButton
-        onClick={handleSendText}
-        disabled={!text.trim()}
-        sx={{
-          backgroundColor: text.trim() ? currentTheme.accentColor : "transparent",
-          color: text.trim() ? "#ffffff" : isDarkMode ? "#8696a0" : "#667781",
-          width: 42,
-          height: 42,
-          transition: "all 0.2s ease",
-          "&:hover": {
-            backgroundColor: text.trim() ? currentTheme.headerColor : "rgba(0,0,0,0.05)",
-          },
-          "&.Mui-disabled": {
-            color: isDarkMode ? "#374248" : "#d1d5db",
-          },
-        }}
-      >
-        <SendIcon sx={{ fontSize: 20 }} />
-      </IconButton>
+          <Typography
+            variant="body2"
+            sx={{ flexGrow: 1, color: isDarkMode ? "#8696a0" : "#667781" }}
+          >
+            Enregistrement audio en cours...
+          </Typography>
+
+          <IconButton onClick={cancelRecording} sx={{ color: "#ef4444" }}>
+            <DeleteOutlineIcon />
+          </IconButton>
+
+          <IconButton
+            onClick={stopAndSendRecording}
+            sx={{
+              backgroundColor: currentTheme.accentColor,
+              color: "#ffffff",
+              "&:hover": { backgroundColor: currentTheme.headerColor },
+            }}
+          >
+            <SendIcon sx={{ fontSize: 18 }} />
+          </IconButton>
+        </Box>
+      ) : (
+        /* Normal Input UI */
+        <>
+          {/* Emoji Button */}
+          <IconButton
+            onClick={() => setEmojiOpen(!emojiOpen)}
+            sx={{
+              color: emojiOpen ? currentTheme.accentColor : isDarkMode ? "#8696a0" : "#54656f",
+              "&:hover": { color: currentTheme.accentColor },
+            }}
+          >
+            <EmojiEmotionsIcon />
+          </IconButton>
+
+          {/* Photo Attachment Button */}
+          <IconButton
+            onClick={() => fileInputRef.current?.click()}
+            disabled={processingImage}
+            sx={{
+              color: isDarkMode ? "#8696a0" : "#54656f",
+              "&:hover": { color: currentTheme.accentColor },
+            }}
+          >
+            {processingImage ? (
+              <CircularProgress size={22} sx={{ color: currentTheme.accentColor }} />
+            ) : (
+              <AddPhotoAlternateIcon />
+            )}
+          </IconButton>
+
+          {/* Text Input */}
+          <TextField
+            fullWidth
+            inputRef={textInputRef}
+            placeholder="Tapez un message..."
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={handleKeyDown}
+            multiline
+            maxRows={4}
+            size="small"
+            sx={{
+              "& .MuiOutlinedInput-root": {
+                backgroundColor: currentTheme.surfaceColor,
+                borderRadius: 3,
+                color: isDarkMode ? "#e9edef" : "#111b21",
+                "& fieldset": { borderColor: "transparent" },
+                "&:hover fieldset": { borderColor: "transparent" },
+                "&.Mui-focused fieldset": { borderColor: currentTheme.accentColor },
+                padding: "8px 14px",
+              },
+              "& .MuiInputBase-input::placeholder": {
+                color: isDarkMode ? "#8696a0" : "#667781",
+                opacity: 1,
+              },
+            }}
+          />
+
+          {/* Send OR Microphone Button */}
+          {text.trim() ? (
+            <IconButton
+              onClick={handleSendText}
+              sx={{
+                backgroundColor: currentTheme.accentColor,
+                color: "#ffffff",
+                width: 42,
+                height: 42,
+                transition: "all 0.2s ease",
+                "&:hover": { backgroundColor: currentTheme.headerColor },
+              }}
+            >
+              <SendIcon sx={{ fontSize: 20 }} />
+            </IconButton>
+          ) : (
+            <IconButton
+              onClick={startRecording}
+              sx={{
+                backgroundColor: currentTheme.accentColor,
+                color: "#ffffff",
+                width: 42,
+                height: 42,
+                transition: "all 0.2s ease",
+                "&:hover": { backgroundColor: currentTheme.headerColor },
+              }}
+            >
+              <MicIcon sx={{ fontSize: 22 }} />
+            </IconButton>
+          )}
+        </>
+      )}
 
       {/* Modal for previewing photo before sending */}
       <ImageSendModal
@@ -245,4 +389,3 @@ export default function MessageInput({ onSendMessage, disabled = false }) {
     </Box>
   );
 }
-

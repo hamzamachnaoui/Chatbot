@@ -17,6 +17,7 @@ import AddReactionOutlinedIcon from "@mui/icons-material/AddReactionOutlined";
 import { formatMessageTime } from "../../utils/formatters";
 import { useChatTheme } from "../../contexts/ChatThemeContext";
 import { ImageViewerModal } from "./ImagePreviewModal";
+import VoiceNotePlayer from "./VoiceNotePlayer";
 
 const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 
@@ -237,6 +238,14 @@ export default function MessageItem({
               }}
             />
           </Box>
+        )}
+
+        {/* Voice Note Attachment (if present) */}
+        {msg.audioUrl && (
+          <VoiceNotePlayer
+            audioUrl={msg.audioUrl}
+            isOwnMessage={isOwnMessage}
+          />
         )}
 
         {/* Text Content */}
