@@ -4,7 +4,7 @@ import { Box, Alert } from "@mui/material";
 import {
   collection,
   addDoc,
-  deleteDoc,
+  deleteField,
   updateDoc,
   doc,
   onSnapshot,
@@ -176,8 +176,17 @@ export default function ChatPage() {
   };
 
   const handleDeleteMessage = async (msgId) => {
+    if (!currentUser || !msgId) return;
+
     try {
-      await deleteDoc(doc(db, "rooms", roomId, "messages", msgId));
+      await updateDoc(doc(db, "rooms", roomId, "messages", msgId), {
+        text: deleteField(),
+        imageUrl: deleteField(),
+        audioUrl: deleteField(),
+        reactions: deleteField(),
+        deleted: true,
+        deletedAt: serverTimestamp(),
+      });
     } catch (error) {
       console.error("Erreur lors de la suppression:", error);
     }
@@ -187,9 +196,8 @@ export default function ChatPage() {
     if (!currentUser) return;
     try {
       const msgRef = doc(db, "rooms", roomId, "messages", msgId);
-      const userKey = currentUser.displayName || currentUser.uid;
       await updateDoc(msgRef, {
-        [`reactions.${userKey}`]: emoji,
+        [`reactions.${currentUser.uid}`]: emoji,
       });
     } catch (error) {
       console.error("Erreur lors de la réaction:", error);

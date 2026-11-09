@@ -37,6 +37,7 @@ export default function MessageItem({
   const bubbleBg = isOwnMessage ? currentTheme.sentBubble : currentTheme.receivedBubble;
   const textColor = isOwnMessage ? currentTheme.sentText : currentTheme.receivedText;
   const timeColor = isOwnMessage ? currentTheme.timeSent : currentTheme.timeReceived;
+  const isDeleted = msg.deleted === true;
 
   const handleMenuOpen = (e) => {
     e.stopPropagation();
@@ -49,14 +50,14 @@ export default function MessageItem({
 
   const handleDelete = () => {
     handleMenuClose();
-    if (onDelete && msg.id) {
+    if (!isDeleted && onDelete && msg.id) {
       onDelete(msg.id);
     }
   };
 
   const handleSelectReaction = (emoji) => {
     setReactionBarOpen(false);
-    if (onReact && msg.id) {
+    if (!isDeleted && onReact && msg.id) {
       onReact(msg.id, emoji);
     }
   };
@@ -104,7 +105,7 @@ export default function MessageItem({
       )}
 
       {/* Action buttons (hover bar for reaction and options) */}
-      {isOwnMessage && hovered && (
+      {isOwnMessage && !isDeleted && hovered && (
         <Box
           sx={{
             display: "flex",
@@ -141,14 +142,14 @@ export default function MessageItem({
           backgroundColor: bubbleBg,
           color: textColor,
           borderRadius: isOwnMessage ? "8px 8px 0px 8px" : "8px 8px 8px 0px",
-          p: msg.imageUrl ? 0.6 : "6px 10px 4px 10px",
+          p: msg.imageUrl && !isDeleted ? 0.6 : "6px 10px 4px 10px",
           boxShadow: "0 1px 0.5px rgba(11,20,26,0.12)",
           wordBreak: "break-word",
           display: "inline-block",
         }}
       >
         {/* Floating Quick Reaction Bar */}
-        {reactionBarOpen && (
+        {reactionBarOpen && !isDeleted && (
           <Box
             sx={{
               position: "absolute",
@@ -201,7 +202,7 @@ export default function MessageItem({
               color: currentTheme.headerColor,
               display: "block",
               mb: 0.3,
-              px: msg.imageUrl ? 0.6 : 0,
+              px: msg.imageUrl && !isDeleted ? 0.6 : 0,
               fontSize: "0.75rem",
             }}
           >
@@ -210,6 +211,19 @@ export default function MessageItem({
         )}
 
         {/* Image Attachment (if present) */}
+        {isDeleted ? (
+          <Typography
+            variant="body2"
+            sx={{
+              color: isDarkMode ? "#8696a0" : "#667781",
+              fontStyle: "italic",
+              px: 0.2,
+            }}
+          >
+            Ce message a été supprimé
+          </Typography>
+        ) : (
+          <>
         {msg.imageUrl && (
           <Box
             sx={{
@@ -264,6 +278,8 @@ export default function MessageItem({
             {msg.text}
           </Typography>
         )}
+          </>
+        )}
 
         {/* Timestamp & double check mark */}
         <Box
@@ -301,7 +317,7 @@ export default function MessageItem({
         </Box>
 
         {/* Emoji Reactions display under bubble */}
-        {Object.keys(aggregatedReactions).length > 0 && (
+        {!isDeleted && Object.keys(aggregatedReactions).length > 0 && (
           <Box
             sx={{
               position: "absolute",
@@ -344,7 +360,7 @@ export default function MessageItem({
       </Box>
 
       {/* Action buttons on received messages when hovered */}
-      {!isOwnMessage && hovered && (
+      {!isOwnMessage && !isDeleted && hovered && (
         <Tooltip title="Réagir">
           <IconButton
             size="small"
@@ -379,7 +395,7 @@ export default function MessageItem({
       </Menu>
 
       {/* Image Fullscreen Viewer */}
-      {msg.imageUrl && (
+      {msg.imageUrl && !isDeleted && (
         <ImageViewerModal
           open={viewerOpen}
           imageSrc={msg.imageUrl}

@@ -1,0 +1,60 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function validNewMessage() {
+      return request.resource.data.keys().hasAll([
+          'text', 'imageUrl', 'audioUrl', 'user', 'userId', 'avatar',
+          'timestamp', 'serverTime'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'text', 'imageUrl', 'audioUrl', 'user', 'userId', 'avatar',
+          'timestamp', 'serverTime'
+        ])
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.user is string
+        && request.resource.data.avatar is string
+        && request.resource.data.text is string
+        && (request.resource.data.imageUrl == null || request.resource.data.imageUrl is string)
+        && (request.resource.data.audioUrl == null || request.resource.data.audioUrl is string)
+        && request.resource.data.timestamp is timestamp
+        && request.resource.data.serverTime is timestamp;
+    }
+
+    function validAuthorDeletion() {
+      return signedIn()
+        && resource.data.userId == request.auth.uid
+        && resource.data.get('deleted', false) != true
+        && request.resource.data.deleted == true
+        && request.resource.data.deletedAt == request.time
+        && !request.resource.data.keys().hasAny([
+          'text', 'imageUrl', 'audioUrl', 'reactions'
+        ])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'text', 'imageUrl', 'audioUrl', 'reactions', 'deleted', 'deletedAt'
+        ]);
+    }
+
+    function validOwnReaction() {
+      let reactions = request.resource.data.get('reactions', {});
+      let previousReactions = resource.data.get('reactions', {});
+      return signedIn()
+        && resource.data.get('deleted', false) != true
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions'])
+        && reactions.diff(previousReactions).affectedKeys().hasOnly([request.auth.uid])
+        && reactions.get(request.auth.uid, null) is string
+        && reactions.get(request.auth.uid, '').size() <= 16;
+    }
+
+    match /rooms/{roomId}/messages/{messageId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && validNewMessage();
+      allow update: if validAuthorDeletion() || validOwnReaction();
+      allow delete: if false;
+    }
+  }
+}

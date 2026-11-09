@@ -83,9 +83,7 @@ export default function MessageList({ messages, onReact, onDelete, isSearching =
         </Box>
       ) : (
         messages.map((msg, index) => {
-          const isOwnMessage =
-            msg.user === currentUser?.displayName ||
-            msg.userId === currentUser?.uid;
+          const isOwnMessage = msg.userId === currentUser?.uid;
 
           const prevMsg = messages[index - 1];
           const currentDateHeader = formatMessageDateHeader(msg.timestamp);
