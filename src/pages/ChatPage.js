@@ -52,7 +52,7 @@ export default function ChatPage() {
 
   // Listen to messages in the active room
   useEffect(() => {
-    if (!roomId) return;
+    if (loading || !currentUser || !roomId) return;
     isInitialLoadRef.current = true;
     setFirestoreError(null);
 
@@ -97,7 +97,7 @@ export default function ChatPage() {
         console.error("Erreur Firestore onSnapshot:", error);
         if (error.code === "permission-denied") {
           setFirestoreError(
-            "La base de données Cloud Firestore n'est pas encore activée ou ses règles de sécurité bloquent l'accès. Activez-la dans la console Firebase pour synchroniser les messages entre fenêtres."
+            "Accès Firestore refusé (permission-denied). Vérifiez les règles de sécurité dans Firebase Console > Firestore Database > Règles."
           );
         } else {
           setFirestoreError(error.message);
@@ -106,28 +106,36 @@ export default function ChatPage() {
     );
 
     return () => unsubscribe();
-  }, [roomId, currentUser]);
+  }, [roomId, currentUser, loading]);
 
   // Track room message counts & notifications
   useEffect(() => {
+    if (loading || !currentUser) return;
+
     const unsubscribes = rooms.map((room) => {
       const q = query(
         collection(db, "rooms", room, "messages"),
         orderBy("timestamp", "desc")
       );
 
-      return onSnapshot(q, (snapshot) => {
-        setRoomMessagesCount((prev) => ({
-          ...prev,
-          [room]: snapshot.size,
-        }));
-      });
+      return onSnapshot(
+        q,
+        (snapshot) => {
+          setRoomMessagesCount((prev) => ({
+            ...prev,
+            [room]: snapshot.size,
+          }));
+        },
+        (error) => {
+          console.warn(`Erreur snapshot pour le salon ${room}:`, error.code);
+        }
+      );
     });
 
     return () => {
       unsubscribes.forEach((unsub) => unsub());
     };
-  }, [rooms]);
+  }, [rooms, currentUser, loading]);
 
   // Clear unread badge when viewing room
   useEffect(() => {
@@ -170,6 +178,13 @@ export default function ChatPage() {
       });
     } catch (error) {
       console.error("Erreur lors de l'envoi du message:", error);
+      if (error.code === "permission-denied") {
+        setFirestoreError(
+          "Impossible d'envoyer le message : permission refusée par les règles Firestore."
+        );
+      } else {
+        setFirestoreError("Erreur lors de l'envoi : " + error.message);
+      }
     } finally {
       setSending(false);
     }
@@ -189,6 +204,7 @@ export default function ChatPage() {
       });
     } catch (error) {
       console.error("Erreur lors de la suppression:", error);
+      setFirestoreError("Impossible de supprimer le message : " + error.message);
     }
   };
 
@@ -201,6 +217,7 @@ export default function ChatPage() {
       });
     } catch (error) {
       console.error("Erreur lors de la réaction:", error);
+      setFirestoreError("Impossible d'ajouter la réaction : " + error.message);
     }
   };
 
