@@ -13,6 +13,7 @@ import {
 import MenuIcon from "@mui/icons-material/Menu";
 import PaletteIcon from "@mui/icons-material/Palette";
 import TagIcon from "@mui/icons-material/Tag";
+import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import SearchIcon from "@mui/icons-material/Search";
 import CloseIcon from "@mui/icons-material/Close";
 import { useChatTheme } from "../../contexts/ChatThemeContext";
@@ -20,6 +21,8 @@ import ThemeSelectorModal from "./ThemeSelectorModal";
 
 export default function ChatHeader({
   roomId,
+  isPrivate = false,
+  peerUser = null,
   messageCount = 0,
   onOpenMobileDrawer,
   searchQuery = "",
@@ -61,8 +64,10 @@ export default function ChatHeader({
             <MenuIcon />
           </IconButton>
 
-          {/* Room Avatar */}
+          {/* Room or Peer Avatar */}
           <Avatar
+            src={isPrivate ? peerUser?.photoURL : undefined}
+            alt={isPrivate ? peerUser?.displayName : roomId}
             sx={{
               bgcolor: currentTheme.accentColor,
               color: "#ffffff",
@@ -72,17 +77,19 @@ export default function ChatHeader({
               fontWeight: "bold",
             }}
           >
-            <TagIcon sx={{ fontSize: 22 }} />
+            {isPrivate
+              ? peerUser?.displayName?.[0]?.toUpperCase() || "?"
+              : <TagIcon sx={{ fontSize: 22 }} />}
           </Avatar>
 
-          {/* Room Title and Subtitle OR Search Input */}
+          {/* Room/Peer Title and Subtitle OR Search Input */}
           {searchOpen ? (
             <Box sx={{ flexGrow: 1, mr: 1.5 }}>
               <TextField
                 autoFocus
                 size="small"
                 fullWidth
-                placeholder="Rechercher dans ce salon..."
+                placeholder={isPrivate ? "Rechercher dans cette discussion..." : "Rechercher dans ce salon..."}
                 value={searchQuery}
                 onChange={(e) => onSearchChange && onSearchChange(e.target.value)}
                 InputProps={{
@@ -116,13 +123,16 @@ export default function ChatHeader({
             </Box>
           ) : (
             <Box sx={{ flexGrow: 1, overflow: "hidden" }}>
-              <Typography
-                variant="subtitle1"
-                noWrap
-                sx={{ fontWeight: "bold", lineHeight: 1.2 }}
-              >
-                #{roomId}
-              </Typography>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.6 }}>
+                {isPrivate && <LockOutlinedIcon sx={{ fontSize: 15, opacity: 0.9 }} />}
+                <Typography
+                  variant="subtitle1"
+                  noWrap
+                  sx={{ fontWeight: "bold", lineHeight: 1.2 }}
+                >
+                  {isPrivate ? peerUser?.displayName || "Discussion privée" : `#${roomId}`}
+                </Typography>
+              </Box>
               <Typography
                 variant="caption"
                 noWrap
@@ -133,7 +143,7 @@ export default function ChatHeader({
                   fontSize: "0.72rem",
                 }}
               >
-                Salon de discussion • {messageCount} message{messageCount > 1 ? "s" : ""}
+                {isPrivate ? "Discussion privée" : "Salon de discussion"} • {messageCount} message{messageCount > 1 ? "s" : ""}
               </Typography>
             </Box>
           )}

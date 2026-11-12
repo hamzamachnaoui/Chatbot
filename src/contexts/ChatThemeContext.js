@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useMemo } from "react";
 import { createTheme, ThemeProvider as MuiThemeProvider } from "@mui/material/styles";
 import { useAuth } from "./AuthContext";
 
@@ -153,15 +153,19 @@ export function ChatThemeProvider({ children }) {
     return saved !== null ? saved === "true" : true;
   });
 
-  // When user changes, load user's personal theme preference
+  // When user changes, load user's personal theme preference (or reset to defaults)
   useEffect(() => {
     const savedTheme = localStorage.getItem(storageKey);
     if (savedTheme && CHAT_THEMES[savedTheme]) {
       setThemeId(savedTheme);
+    } else {
+      setThemeId("whatsapp_classic");
     }
     const savedDoodle = localStorage.getItem(`${storageKey}_doodle`);
     if (savedDoodle !== null) {
       setDoodleEnabled(savedDoodle === "true");
+    } else {
+      setDoodleEnabled(true);
     }
   }, [storageKey]);
 
@@ -184,36 +188,40 @@ export function ChatThemeProvider({ children }) {
   const isDarkMode = currentTheme.category === "dark";
 
   // Material-UI theme integrated with current chat theme
-  const muiTheme = createTheme({
-    palette: {
-      mode: isDarkMode ? "dark" : "light",
-      primary: {
-        main: currentTheme.headerColor,
-        contrastText: currentTheme.headerTextColor,
-      },
-      secondary: {
-        main: currentTheme.accentColor,
-      },
-      background: {
-        default: isDarkMode ? "#111b21" : "#f0f2f5",
-        paper: isDarkMode ? "#202c33" : "#ffffff",
-      },
-    },
-    typography: {
-      fontFamily: [
-        "-apple-system",
-        "BlinkMacSystemFont",
-        '"Segoe UI"',
-        "Roboto",
-        "Helvetica",
-        "Arial",
-        "sans-serif",
-      ].join(","),
-    },
-    shape: {
-      borderRadius: 10,
-    },
-  });
+  const muiTheme = useMemo(
+    () =>
+      createTheme({
+        palette: {
+          mode: isDarkMode ? "dark" : "light",
+          primary: {
+            main: currentTheme.headerColor,
+            contrastText: currentTheme.headerTextColor,
+          },
+          secondary: {
+            main: currentTheme.accentColor,
+          },
+          background: {
+            default: isDarkMode ? "#111b21" : "#f0f2f5",
+            paper: isDarkMode ? "#202c33" : "#ffffff",
+          },
+        },
+        typography: {
+          fontFamily: [
+            "-apple-system",
+            "BlinkMacSystemFont",
+            '"Segoe UI"',
+            "Roboto",
+            "Helvetica",
+            "Arial",
+            "sans-serif",
+          ].join(","),
+        },
+        shape: {
+          borderRadius: 10,
+        },
+      }),
+    [currentTheme, isDarkMode]
+  );
 
   const value = {
     themeId,

@@ -6,6 +6,7 @@ import {
   ClickAwayListener,
   CircularProgress,
   Typography,
+  Alert,
 } from "@mui/material";
 import EmojiEmotionsIcon from "@mui/icons-material/EmojiEmotions";
 import SendIcon from "@mui/icons-material/Send";
@@ -60,12 +61,15 @@ function formatRecordTime(seconds) {
   return `${m}:${s < 10 ? "0" : ""}${s}`;
 }
 
+const MAX_DATA_URL_BYTES = 900 * 1024; // Safe ceiling under Firestore's 1 MiB document limit
+
 export default function MessageInput({ onSendMessage, disabled = false }) {
   const { currentTheme, isDarkMode } = useChatTheme();
   const [text, setText] = useState("");
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [pendingImage, setPendingImage] = useState(null);
   const [processingImage, setProcessingImage] = useState(false);
+  const [mediaError, setMediaError] = useState("");
 
   // Audio recording state
   const [isRecording, setIsRecording] = useState(false);
@@ -80,11 +84,24 @@ export default function MessageInput({ onSendMessage, disabled = false }) {
   useEffect(() => {
     return () => {
       if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      const recorder = mediaRecorderRef.current;
+      if (recorder) {
+        recorder.onstop = null;
+        if (recorder.state !== "inactive") {
+          try {
+            recorder.stop();
+          } catch (e) {
+            // Ignore stop error on unmount
+          }
+        }
+        recorder.stream?.getTracks().forEach((track) => track.stop());
+      }
     };
   }, []);
 
   const handleSendText = () => {
     if (!text.trim() || disabled) return;
+    setMediaError("");
     onSendMessage({ text: text.trim() });
     setText("");
     setEmojiOpen(false);
@@ -106,12 +123,24 @@ export default function MessageInput({ onSendMessage, disabled = false }) {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setMediaError("");
+    if (!file.type.startsWith("image/")) {
+      setMediaError("Veuillez sélectionner un fichier image valide.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
     try {
       setProcessingImage(true);
       const compressedDataUrl = await compressImage(file);
+      if (compressedDataUrl.length > MAX_DATA_URL_BYTES) {
+        setMediaError("L'image est trop volumineuse après compression pour être envoyée.");
+        return;
+      }
       setPendingImage(compressedDataUrl);
     } catch (err) {
       console.error("Failed to process image:", err);
+      setMediaError("Impossible de traiter cette image.");
     } finally {
       setProcessingImage(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -119,7 +148,7 @@ export default function MessageInput({ onSendMessage, disabled = false }) {
   };
 
   const handleConfirmSendImage = (caption) => {
-    if (pendingImage) {
+    if (pendingImage && !disabled) {
       onSendMessage({
         text: caption || "",
         imageUrl: pendingImage,
@@ -130,6 +159,14 @@ export default function MessageInput({ onSendMessage, disabled = false }) {
 
   // Voice recording handlers
   const startRecording = async () => {
+    if (disabled || isRecording) return;
+    setMediaError("");
+
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      setMediaError("L'enregistrement audio n'est pas pris en charge par ce navigateur.");
+      return;
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioChunksRef.current = [];
@@ -151,14 +188,19 @@ export default function MessageInput({ onSendMessage, disabled = false }) {
       }, 1000);
     } catch (err) {
       console.error("Microphone access denied or error:", err);
-      alert("Impossible d'accéder au microphone. Veuillez autoriser l'accès.");
+      setMediaError("Impossible d'accéder au microphone. Veuillez autoriser l'accès.");
     }
   };
 
   const cancelRecording = () => {
-    if (mediaRecorderRef.current) {
-      mediaRecorderRef.current.stream.getTracks().forEach((track) => track.stop());
-      mediaRecorderRef.current.stop();
+    const recorder = mediaRecorderRef.current;
+    if (recorder) {
+      recorder.onstop = null;
+      if (recorder.state !== "inactive") {
+        recorder.stop();
+      }
+      recorder.stream?.getTracks().forEach((track) => track.stop());
+      mediaRecorderRef.current = null;
     }
     clearInterval(recordingTimerRef.current);
     setIsRecording(false);
@@ -167,20 +209,35 @@ export default function MessageInput({ onSendMessage, disabled = false }) {
   };
 
   const stopAndSendRecording = () => {
-    if (!mediaRecorderRef.current) return;
+    const recorder = mediaRecorderRef.current;
+    if (!recorder || disabled) return;
 
-    mediaRecorderRef.current.onstop = () => {
-      const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+    const mimeType = recorder.mimeType || "audio/webm";
+    recorder.onstop = () => {
+      recorder.stream?.getTracks().forEach((track) => track.stop());
+      mediaRecorderRef.current = null;
+
+      if (audioChunksRef.current.length === 0) {
+        setMediaError("Enregistrement audio vide, veuillez réessayer.");
+        return;
+      }
+
+      const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
       const reader = new FileReader();
       reader.readAsDataURL(audioBlob);
       reader.onloadend = () => {
         const base64Audio = reader.result;
+        if (typeof base64Audio !== "string" || base64Audio.length > MAX_DATA_URL_BYTES) {
+          setMediaError("Note vocale trop longue pour un envoi direct (limite ~900 Ko).");
+          return;
+        }
         onSendMessage({ audioUrl: base64Audio });
       };
-      mediaRecorderRef.current.stream.getTracks().forEach((track) => track.stop());
     };
 
-    mediaRecorderRef.current.stop();
+    if (recorder.state !== "inactive") {
+      recorder.stop();
+    }
     clearInterval(recordingTimerRef.current);
     setIsRecording(false);
     setRecordingSeconds(0);
@@ -207,6 +264,24 @@ export default function MessageInput({ onSendMessage, disabled = false }) {
         style={{ display: "none" }}
         onChange={handleFileChange}
       />
+
+      {mediaError && (
+        <Alert
+          severity="error"
+          onClose={() => setMediaError("")}
+          sx={{
+            position: "absolute",
+            bottom: "100%",
+            left: 12,
+            right: 12,
+            mb: 1,
+            borderRadius: 2,
+            zIndex: 1300,
+          }}
+        >
+          {mediaError}
+        </Alert>
+      )}
 
       {/* Emoji Picker Popover */}
       {emojiOpen && (
@@ -305,7 +380,7 @@ export default function MessageInput({ onSendMessage, disabled = false }) {
           {/* Photo Attachment Button */}
           <IconButton
             onClick={() => fileInputRef.current?.click()}
-            disabled={processingImage}
+            disabled={disabled || processingImage}
             sx={{
               color: isDarkMode ? "#8696a0" : "#54656f",
               "&:hover": { color: currentTheme.accentColor },
@@ -350,6 +425,7 @@ export default function MessageInput({ onSendMessage, disabled = false }) {
           {text.trim() ? (
             <IconButton
               onClick={handleSendText}
+              disabled={disabled}
               sx={{
                 backgroundColor: currentTheme.accentColor,
                 color: "#ffffff",
@@ -364,6 +440,7 @@ export default function MessageInput({ onSendMessage, disabled = false }) {
           ) : (
             <IconButton
               onClick={startRecording}
+              disabled={disabled}
               sx={{
                 backgroundColor: currentTheme.accentColor,
                 color: "#ffffff",

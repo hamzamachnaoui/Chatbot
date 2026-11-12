@@ -50,11 +50,50 @@ service cloud.firestore {
         && reactions.get(request.auth.uid, '').size() <= 16;
     }
 
+    function isPrivateChatParticipant(chatId) {
+      let parts = chatId.split('__');
+      return signedIn()
+        && parts.size() == 2
+        && parts[0] != parts[1]
+        && request.auth.uid in parts;
+    }
+
+    match /users/{userId} {
+      allow read: if signedIn();
+      allow create, update: if signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.displayName is string
+        && request.resource.data.photoURL is string;
+      allow delete: if false;
+    }
+
     match /rooms/{roomId}/messages/{messageId} {
       allow read: if signedIn();
       allow create: if signedIn() && validNewMessage();
       allow update: if validAuthorDeletion() || validOwnReaction();
       allow delete: if false;
+    }
+
+    match /privateChats/{chatId} {
+      allow get: if isPrivateChatParticipant(chatId)
+        || (signedIn() && resource != null && request.auth.uid in resource.data.participants);
+      allow list: if signedIn() && request.auth.uid in resource.data.participants;
+      allow create: if isPrivateChatParticipant(chatId)
+        && request.resource.data.participants is list
+        && request.resource.data.participants.size() == 2
+        && request.resource.data.participants.hasAll(chatId.split('__'));
+      allow update: if isPrivateChatParticipant(chatId)
+        && request.auth.uid in resource.data.participants
+        && request.resource.data.participants == resource.data.participants;
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow read: if isPrivateChatParticipant(chatId);
+        allow create: if isPrivateChatParticipant(chatId) && validNewMessage();
+        allow update: if isPrivateChatParticipant(chatId) && (validAuthorDeletion() || validOwnReaction());
+        allow delete: if false;
+      }
     }
   }
 }

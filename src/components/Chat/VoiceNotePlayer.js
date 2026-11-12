@@ -6,7 +6,7 @@ import MicIcon from "@mui/icons-material/Mic";
 import { useChatTheme } from "../../contexts/ChatThemeContext";
 
 function formatDuration(seconds) {
-  if (isNaN(seconds) || seconds < 0) return "0:00";
+  if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
   return `${m}:${s < 10 ? "0" : ""}${s}`;
@@ -24,12 +24,19 @@ export default function VoiceNotePlayer({ audioUrl, isOwnMessage }) {
     const audio = audioRef.current;
     if (!audio) return;
 
-    const onLoadedMetadata = () => {
-      setDuration(audio.duration || 0);
+    setIsPlaying(false);
+    setCurrentTime(0);
+    setDuration(0);
+
+    const syncDuration = () => {
+      if (Number.isFinite(audio.duration) && audio.duration > 0) {
+        setDuration(audio.duration);
+      }
     };
 
     const onTimeUpdate = () => {
-      setCurrentTime(audio.currentTime);
+      setCurrentTime(audio.currentTime || 0);
+      syncDuration();
     };
 
     const onEnded = () => {
@@ -37,12 +44,14 @@ export default function VoiceNotePlayer({ audioUrl, isOwnMessage }) {
       setCurrentTime(0);
     };
 
-    audio.addEventListener("loadedmetadata", onLoadedMetadata);
+    audio.addEventListener("loadedmetadata", syncDuration);
+    audio.addEventListener("durationchange", syncDuration);
     audio.addEventListener("timeupdate", onTimeUpdate);
     audio.addEventListener("ended", onEnded);
 
     return () => {
-      audio.removeEventListener("loadedmetadata", onLoadedMetadata);
+      audio.removeEventListener("loadedmetadata", syncDuration);
+      audio.removeEventListener("durationchange", syncDuration);
       audio.removeEventListener("timeupdate", onTimeUpdate);
       audio.removeEventListener("ended", onEnded);
     };
@@ -55,6 +64,7 @@ export default function VoiceNotePlayer({ audioUrl, isOwnMessage }) {
       audio.pause();
       setIsPlaying(false);
     } else {
+      audio.playbackRate = playbackRate;
       audio.play().then(() => setIsPlaying(true)).catch(() => {});
     }
   };
@@ -110,8 +120,9 @@ export default function VoiceNotePlayer({ audioUrl, isOwnMessage }) {
       <Box sx={{ flexGrow: 1, display: "flex", flexDirection: "column" }}>
         <Slider
           size="small"
-          value={currentTime}
-          max={duration || 100}
+          value={duration > 0 ? Math.min(currentTime, duration) : 0}
+          max={duration > 0 ? duration : 100}
+          disabled={duration <= 0}
           onChange={handleSliderChange}
           sx={{
             color: currentTheme.accentColor,

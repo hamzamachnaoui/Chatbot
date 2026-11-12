@@ -17,7 +17,7 @@ export default function MessageList({ messages, onReact, onDelete, isSearching =
   const [showScrollBottom, setShowScrollBottom] = useState(false);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView?.({ behavior: "smooth" });
   }, [messages.length]);
 
   const handleScroll = () => {
@@ -28,7 +28,7 @@ export default function MessageList({ messages, onReact, onDelete, isSearching =
   };
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView?.({ behavior: "smooth" });
   };
 
   const doodleBg = doodleEnabled

@@ -69,6 +69,15 @@ export default function MessageItem({
     return acc;
   }, {});
 
+  const showActions = !isDeleted && (hovered || reactionBarOpen || Boolean(menuAnchorEl));
+
+  const handleBubbleTap = () => {
+    if (isDeleted) return;
+    if (window.matchMedia?.("(hover: none)").matches) {
+      setHovered((prev) => !prev);
+    }
+  };
+
   return (
     <Box
       onMouseEnter={() => setHovered(true)}
@@ -105,7 +114,7 @@ export default function MessageItem({
       )}
 
       {/* Action buttons (hover bar for reaction and options) */}
-      {isOwnMessage && !isDeleted && hovered && (
+      {isOwnMessage && showActions && (
         <Box
           sx={{
             display: "flex",
@@ -136,6 +145,7 @@ export default function MessageItem({
 
       {/* Bubble Container */}
       <Box
+        onClick={handleBubbleTap}
         sx={{
           maxWidth: { xs: "85%", sm: "70%", md: "60%" },
           position: "relative",
@@ -360,7 +370,7 @@ export default function MessageItem({
       </Box>
 
       {/* Action buttons on received messages when hovered */}
-      {!isOwnMessage && !isDeleted && hovered && (
+      {!isOwnMessage && showActions && (
         <Tooltip title="Réagir">
           <IconButton
             size="small"

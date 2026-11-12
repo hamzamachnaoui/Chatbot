@@ -7,9 +7,29 @@ import {
   signOut,
   onAuthStateChanged,
 } from "firebase/auth";
-import { auth } from "../config/firebase";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { auth, db } from "../config/firebase";
 
 const AuthContext = createContext(null);
+
+async function syncUserDirectory(user, overrides = {}) {
+  if (!user?.uid) return;
+  try {
+    await setDoc(
+      doc(db, "users", user.uid),
+      {
+        uid: user.uid,
+        displayName: overrides.displayName ?? user.displayName ?? "Utilisateur",
+        photoURL: overrides.photoURL ?? user.photoURL ?? "",
+        isAnonymous: Boolean(user.isAnonymous),
+        lastSeen: serverTimestamp(),
+      },
+      { merge: true }
+    );
+  } catch (err) {
+    console.warn("Impossible de synchroniser le profil utilisateur:", err?.code || err?.message);
+  }
+}
 
 // Safely format any username to a valid RFC email for Firebase Auth
 export function formatUsernameToEmail(username) {
@@ -35,6 +55,9 @@ export function AuthProvider({ children }) {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
       setLoading(false);
+      if (user) {
+        syncUserDirectory(user);
+      }
     });
 
     return () => unsubscribe();
@@ -53,6 +76,10 @@ export function AuthProvider({ children }) {
       displayName: cleanUsername,
       photoURL: avatarUrl,
     });
+    await syncUserDirectory(userCredential.user, {
+      displayName: cleanUsername,
+      photoURL: avatarUrl || "",
+    });
     setCurrentUser({
       ...userCredential.user,
       displayName: cleanUsername,
@@ -63,15 +90,20 @@ export function AuthProvider({ children }) {
 
   const loginAsGuest = async (nickname, avatarUrl) => {
     const cleanNickname = nickname?.trim() || `Invité_${Math.floor(1000 + Math.random() * 9000)}`;
+    const guestAvatar = avatarUrl || "https://api.dicebear.com/7.x/avataaars/svg?seed=Guest";
     const userCredential = await signInAnonymously(auth);
     await updateProfile(userCredential.user, {
       displayName: cleanNickname,
-      photoURL: avatarUrl || "https://api.dicebear.com/7.x/avataaars/svg?seed=Guest",
+      photoURL: guestAvatar,
+    });
+    await syncUserDirectory(userCredential.user, {
+      displayName: cleanNickname,
+      photoURL: guestAvatar,
     });
     setCurrentUser({
       ...userCredential.user,
       displayName: cleanNickname,
-      photoURL: avatarUrl || "https://api.dicebear.com/7.x/avataaars/svg?seed=Guest",
+      photoURL: guestAvatar,
     });
     return userCredential.user;
   };
@@ -86,6 +118,7 @@ export function AuthProvider({ children }) {
       if (displayName) updates.displayName = displayName.trim();
       if (photoURL) updates.photoURL = photoURL;
       await updateProfile(auth.currentUser, updates);
+      await syncUserDirectory(auth.currentUser, updates);
       setCurrentUser((prev) => ({
         ...prev,
         displayName: updates.displayName || prev?.displayName,

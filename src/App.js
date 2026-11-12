@@ -14,6 +14,7 @@ function App() {
           <Routes>
             <Route path="/" element={<AuthPage />} />
             <Route path="/chat/:roomId" element={<ChatPage />} />
+            <Route path="/dm/:chatId" element={<ChatPage isPrivateMode />} />
             <Route path="/chat" element={<Navigate to="/chat/Général" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
